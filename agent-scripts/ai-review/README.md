@@ -11,27 +11,23 @@ The first lines of every bot comment say the comment is automated. It is not a m
 3. An xAI key, stored as repo secret `XAI_API_KEY`.
 4. Set `AI_REVIEW_MACHINE_USER` in the workflow to that user's login (default `tanstack-ai-bot`).
 
-Until both secrets exist, the job fails with `missing AI_REVIEW_TOKEN or XAI_API_KEY`. It does not comment as `github-actions[bot]`.
+Until both secrets exist, the job skips green. It does not comment as `github-actions[bot]`.
 
 ## How a run starts
 
-There is no automatic run. A maintainer starts every run, one of three ways:
+Two workflows split the job. `ai-review-signal` runs on every PR event with no secrets and only signals. Its completion starts `ai-review` on the base branch with secrets. No `pull_request_target` anywhere.
 
-- Adds the `ai-review` label. Remove it and add it again to run a second time.
-- Comments `/ai-review` on the PR.
-- Runs Actions `workflow_dispatch` with a PR number.
+Auto: the signal fires on opened, synchronize, ready_for_review, and labeled. Auto skips drafts, bot PRs, roster-maintainer PRs, the machine user's own head commit, and a head SHA this bot already reviewed. The bot never executes PR code.
 
-The label trigger uses `pull_request_target`, so it runs on the base branch with secrets and works on fork PRs. `pull_request` auto triggers stay off: fork PRs get no secrets and need approval before any workflow runs, so auto would fail red on every new PR. A run with missing secrets skips green instead of failing.
+Manual: a run with the `ai-review` label on the PR, a `/ai-review` comment, or Actions `workflow_dispatch` skips nothing. Keep the label on the PR to re-review every push. Remove it to stop.
 
-Keep the sender logins in the workflow `if:` in sync with `.github/maintainers.json`.
-
-Manual runs skip nothing: drafts, bot PRs, roster-maintainer PRs, the machine user's own head commit, and an already-reviewed head SHA all still run. The bot never executes PR code.
+A first-time fork PR needs one workflow approval. After any merged commit or PR, later runs are automatic.
 
 After a clean `ai-ready` scan, the bot approves the waiting Test checks.
 
 ## Labels
 
-A roster maintainer adds the `ai-review` label to start a manual run. The bot does not remove that label. The bot does not auto-approve workflows when the PR changes a workflow file.
+The `ai-review` label opts a PR into a manual review on every push. The bot does not remove that label. The bot does not auto-approve workflows when the PR changes a workflow file.
 
 The bot sets exactly one of these verdict labels. It removes the other two. It never touches `ready-to-merge`.
 

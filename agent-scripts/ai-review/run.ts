@@ -35,6 +35,7 @@ import {
   upsertReviewComment,
 } from './comments.ts'
 import {
+  AI_REVIEW_TRIGGER_LABEL,
   isAiReviewLabelEvent,
   isPullRequestLabeledEvent,
   parseReviewEvent,
@@ -265,8 +266,16 @@ export async function runReviewJob(opts: {
   }
 
   const pr = await fetchPullRequest(opts.client, opts.repo, parsed.prNumber)
+  // A workflow_run cannot say why the signal fired, so the ai-review label
+  // on the PR means manual: only maintainers can label, and it opts the PR
+  // into a review on every push until it is removed.
+  const mode =
+    opts.eventName === 'workflow_run' &&
+    pr.labels.includes(AI_REVIEW_TRIGGER_LABEL)
+      ? 'manual'
+      : parsed.mode
   const skip = shouldSkip({
-    mode: parsed.mode,
+    mode,
     isDraft: pr.isDraft,
     authorLogin: pr.authorLogin,
     headCommitAuthorLogin: opts.headCommitAuthorLogin,

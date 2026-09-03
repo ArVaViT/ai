@@ -182,7 +182,7 @@ The defensive `ignore` list in `.changeset/config.json` blocks accidental public
 
 ### Automated Grok review
 
-A Grok agent reviews a PR when a maintainer asks. The first lines of that comment say it is automated. It is not a maintainer review.
+A Grok agent reviews PRs automatically when they open or sync. The first lines of that comment say it is automated. It is not a maintainer review.
 
 The bot sets exactly one of these labels:
 
@@ -192,7 +192,7 @@ The bot sets exactly one of these labels:
 
 The bot never GitHub-approves and never merges. The `ready-to-merge` label still means a human approval plus green CI.
 
-If the bot pushes, it only commits bugs and suggestions the review listed. Maintainers start a new run by adding the `ai-review` label, with a `/ai-review` comment, or from Actions (`workflow_dispatch`). There is no automatic run on new PRs.
+If the bot pushes, it only commits bugs and suggestions the review listed. Maintainers can also start a run by adding the `ai-review` label, with a `/ai-review` comment, or from Actions (`workflow_dispatch`). A first-time fork PR needs one workflow approval first.
 
 ## Adding a new provider adapter
 

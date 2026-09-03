@@ -85,6 +85,39 @@ describe('parseReviewEvent', () => {
     })
   })
 
+  it('parses a workflow_run with a PR as auto', () => {
+    expect(
+      parseReviewEvent({
+        eventName: 'workflow_run',
+        event: {
+          action: 'completed',
+          workflow_run: {
+            conclusion: 'success',
+            pull_requests: [{ number: 42 }],
+          },
+        },
+      }),
+    ).toEqual({
+      prNumber: 42,
+      mode: 'auto',
+      commentAuthor: null,
+      eventName: 'workflow_run',
+    })
+  })
+
+  it('throws when workflow_run has no pull request', () => {
+    expect(() =>
+      parseReviewEvent({
+        eventName: 'workflow_run',
+        event: {
+          action: 'completed',
+          workflow_run: { conclusion: 'success', pull_requests: [] },
+        },
+      }),
+    ).toThrow(
+      'workflow_run event is missing workflow_run.pull_requests[0].number',
+    )
+  })
   it('parses workflow_dispatch string pr_number as manual', () => {
     expect(
       parseReviewEvent({

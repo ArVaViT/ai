@@ -24,6 +24,7 @@ function samplePull(
     draft?: boolean
     maintainer_can_modify?: boolean
     login?: string
+    labels?: Array<string>
   } = {},
 ) {
   return {
@@ -43,7 +44,7 @@ function samplePull(
       user: { login: 'alice' },
     },
     maintainer_can_modify: overrides.maintainer_can_modify ?? false,
-    labels: [{ name: 'bug' }],
+    labels: (overrides.labels ?? ['bug']).map((name) => ({ name })),
   }
 }
 
@@ -384,6 +385,62 @@ describe('runReviewJob', () => {
     })
     expect(comments).toHaveLength(1)
   })
+
+  function workflowRunEvent() {
+    return {
+      action: 'completed',
+      workflow_run: {
+        conclusion: 'success',
+        pull_requests: [{ number: NUMBER }],
+      },
+    }
+  }
+
+  it('runs a workflow_run signal in auto mode', async () => {
+    const { result, comments } = await runJob({
+      eventName: 'workflow_run',
+      event: workflowRunEvent(),
+      review: readyReview,
+    })
+
+    expect(result).toEqual({
+      skipped: false,
+      verdict: { verdict: 'ready', issues: [] },
+      label: 'ai-ready',
+      pushLanded: false,
+    })
+    expect(comments).toHaveLength(1)
+  })
+
+  it('runs a workflow_run as manual when the ai-review label is on the PR', async () => {
+    const { result, comments } = await runJob({
+      eventName: 'workflow_run',
+      pull: samplePull({ login: 'alem', labels: ['ai-review'] }),
+      event: workflowRunEvent(),
+      review: readyReview,
+    })
+
+    expect(result).toEqual({
+      skipped: false,
+      verdict: { verdict: 'ready', issues: [] },
+      label: 'ai-ready',
+      pushLanded: false,
+    })
+    expect(comments).toHaveLength(1)
+  })
+
+  it('skips a workflow_run for a maintainer PR without the ai-review label', async () => {
+    const { result, comments, gitCalls } = await runJob({
+      eventName: 'workflow_run',
+      pull: samplePull({ login: 'alem' }),
+      event: workflowRunEvent(),
+    })
+
+    expect(result).toEqual({ skipped: true, reason: 'maintainer-author' })
+    expect(comments).toEqual([])
+    expect(gitCalls).toEqual([])
+  })
+
   it('skips a labeled pull_request that is not the ai-review label', async () => {
     const { result, comments, gitCalls } = await runJob({
       event: {
