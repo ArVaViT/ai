@@ -15,16 +15,19 @@ Until both secrets exist, the job fails with `missing AI_REVIEW_TOKEN or XAI_API
 
 ## How a run starts
 
-- Auto: `pull_request` opened, synchronize, or ready_for_review, when the PR is not a draft.
-- Auto does not start when the PR author is AlemTuzlak, tombeckenham, or jherr.
-- Keep those logins in sync with `.github/maintainers.json`. GitHub then shows a skipped check, not a cancelled check.
-- Manual: Actions `workflow_dispatch` with a PR number.
-- Manual: a login in `.github/maintainers.json` comments `/ai-review` on the PR.
-- Manual: a login in `.github/maintainers.json` adds the `ai-review` label. Remove it and add it again to run a second time.
+There is no automatic run. A maintainer starts every run, one of three ways:
 
-Auto also skips drafts, bot PRs, roster-maintainer PRs, the machine user's own head commit, and a head SHA this bot already reviewed. Manual still runs on those. The bot never executes PR code.
+- Adds the `ai-review` label. Remove it and add it again to run a second time.
+- Comments `/ai-review` on the PR.
+- Runs Actions `workflow_dispatch` with a PR number.
 
-A first-time fork PR does not run auto review until a maintainer comments `/ai-review` or adds the `ai-review` label. After a clean `ai-ready` scan, the bot approves the waiting Test checks.
+The label trigger uses `pull_request_target`, so it runs on the base branch with secrets and works on fork PRs. `pull_request` auto triggers stay off: fork PRs get no secrets and need approval before any workflow runs, so auto would fail red on every new PR. A run with missing secrets skips green instead of failing.
+
+Keep the sender logins in the workflow `if:` in sync with `.github/maintainers.json`.
+
+Manual runs skip nothing: drafts, bot PRs, roster-maintainer PRs, the machine user's own head commit, and an already-reviewed head SHA all still run. The bot never executes PR code.
+
+After a clean `ai-ready` scan, the bot approves the waiting Test checks.
 
 ## Labels
 
@@ -55,7 +58,7 @@ Open the **AI review** workflow log. The job prints text, reasoning, tool input/
 
 Common causes:
 
-- Missing `AI_REVIEW_TOKEN` or `XAI_API_KEY`
+- Missing `AI_REVIEW_TOKEN` or `XAI_API_KEY` (the job skips green, no review)
 - Fork with maintainer edits off (comment is posted, label is `ai-needs-work`, no push)
 - `chat()` did not return a valid verdict object
 - Workspace setup failed to install the Grok CLI
