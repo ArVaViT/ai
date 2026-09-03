@@ -1,12 +1,16 @@
 name: AI review
 
-# In-process Grok review bot. Checks out this repo's default branch for the
-# script, then fetches the PR head into a second worktree for read/edit.
-# Never pull_request_target. Never pnpm install in the PR tree.
+# Manual Grok review bot. Checks out the base branch for the script, then
+# fetches the PR head into a second worktree for read/edit.
+# pull_request_target (labeled only) runs in the base repo with secrets, so a
+# maintainer adding the ai-review label works on fork PRs. There is no
+# automatic run on opened/synchronize: fork PRs get no secrets under
+# pull_request and need approval before any workflow runs, so auto would fail
+# red on every new PR. Never pnpm install in the PR tree.
 
 on:
-  pull_request:
-    types: [opened, synchronize, ready_for_review, labeled]
+  pull_request_target:
+    types: [labeled]
   workflow_dispatch:
     inputs:
       pr_number:
@@ -26,13 +30,7 @@ jobs:
   review:
     name: Review
     if: >
-      (github.event_name == 'pull_request'
-        && github.event.action != 'labeled'
-        && github.event.pull_request.draft == false
-        && github.event.pull_request.user.login != 'AlemTuzlak'
-        && github.event.pull_request.user.login != 'tombeckenham'
-        && github.event.pull_request.user.login != 'jherr')
-      || (github.event_name == 'pull_request'
+      (github.event_name == 'pull_request_target'
         && github.event.action == 'labeled'
         && github.event.label.name == 'ai-review'
         && (github.event.sender.login == 'AlemTuzlak'
@@ -47,6 +45,10 @@ jobs:
     permissions:
       contents: read
     steps:
+      # Checkout is always the trusted base (pull_request_target checks out
+      # the base; issue_comment and workflow_dispatch check out the default
+      # branch). The untrusted PR head is only fetched into .pr-head below
+      # for file reads. Never check out or build the PR head here.
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -57,6 +59,7 @@ jobs:
       - name: Build packages
         run: pnpm exec nx run @tanstack/ai-grok-build:build
       - name: Add PR head worktree
+        id: guard
         env:
           AI_REVIEW_TOKEN: ${{ secrets.AI_REVIEW_TOKEN }}
           XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
@@ -68,11 +71,12 @@ jobs:
         shell: bash
         run: |
           if [ -z "${AI_REVIEW_TOKEN}" ] || [ -z "${XAI_API_KEY}" ]; then
-            echo "missing AI_REVIEW_TOKEN or XAI_API_KEY"
-            exit 1
+            echo "AI review skipped: missing AI_REVIEW_TOKEN or XAI_API_KEY"
+            echo "has_secrets=false" >> "${GITHUB_OUTPUT}"
+            exit 0
           fi
           case "${EVENT_NAME}" in
-            pull_request)
+            pull_request_target)
               PR_NUMBER="${PR_NUMBER_PULL}"
               ;;
             issue_comment)
@@ -97,7 +101,9 @@ jobs:
           MACHINE="$(gh api user --jq .login)"
           echo "AI_REVIEW_HEAD_COMMIT_AUTHOR=${LOGIN}" >> "${GITHUB_ENV}"
           echo "AI_REVIEW_MACHINE_USER=${MACHINE}" >> "${GITHUB_ENV}"
+          echo "has_secrets=true" >> "${GITHUB_OUTPUT}"
       - name: Run review
+        if: steps.guard.outputs.has_secrets == 'true'
         run: pnpm ai-review
         env:
           AI_REVIEW_TOKEN: ${{ secrets.AI_REVIEW_TOKEN }}

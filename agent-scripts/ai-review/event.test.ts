@@ -35,6 +35,38 @@ describe('parseReviewEvent', () => {
     })
   })
 
+  it('parses a pull_request_target labeled ai-review as manual', () => {
+    expect(
+      parseReviewEvent({
+        eventName: 'pull_request_target',
+        event: {
+          action: 'labeled',
+          label: { name: 'ai-review' },
+          sender: { login: 'alem' },
+          pull_request: { number: 42 },
+        },
+      }),
+    ).toEqual({
+      prNumber: 42,
+      mode: 'manual',
+      commentAuthor: 'alem',
+      eventName: 'pull_request_target',
+    })
+  })
+
+  it('parses a plain pull_request_target as auto', () => {
+    expect(
+      parseReviewEvent({
+        eventName: 'pull_request_target',
+        event: { pull_request: { number: 42 } },
+      }),
+    ).toEqual({
+      prNumber: 42,
+      mode: 'auto',
+      commentAuthor: null,
+      eventName: 'pull_request_target',
+    })
+  })
   it('parses a pull_request labeled with another name as auto', () => {
     expect(
       parseReviewEvent({

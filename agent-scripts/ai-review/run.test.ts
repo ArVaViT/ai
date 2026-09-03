@@ -363,6 +363,27 @@ describe('runReviewJob', () => {
     expect(comments).toHaveLength(1)
   })
 
+  it('runs when the ai-review label is added via pull_request_target', async () => {
+    const { result, comments } = await runJob({
+      eventName: 'pull_request_target',
+      pull: samplePull({ login: 'alem' }),
+      event: {
+        action: 'labeled',
+        label: { name: 'ai-review' },
+        sender: { login: 'alem' },
+        pull_request: { number: NUMBER },
+      },
+      review: readyReview,
+    })
+
+    expect(result).toEqual({
+      skipped: false,
+      verdict: { verdict: 'ready', issues: [] },
+      label: 'ai-ready',
+      pushLanded: false,
+    })
+    expect(comments).toHaveLength(1)
+  })
   it('skips a labeled pull_request that is not the ai-review label', async () => {
     const { result, comments, gitCalls } = await runJob({
       event: {

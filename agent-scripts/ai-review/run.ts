@@ -250,7 +250,8 @@ export async function runReviewJob(opts: {
   }
 
   if (
-    opts.eventName === 'pull_request' &&
+    (opts.eventName === 'pull_request' ||
+      opts.eventName === 'pull_request_target') &&
     isPullRequestLabeledEvent(opts.event) &&
     !isAiReviewLabelEvent(opts.event)
   ) {
