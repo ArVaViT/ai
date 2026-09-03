@@ -4,9 +4,8 @@ name: AI review
 # the unprivileged AI review signal workflow completes, plus manual
 # issue_comment and workflow_dispatch triggers. No pull_request_target: the
 # signal runs on pull_request with no secrets, and this workflow reads only
-# the PR number from its event, never artifacts or PR code. The PR head is
-# fetched into a second worktree for file reads only. Never pnpm install in
-# the PR tree.
+# the PR number from its event, never artifacts or PR code. It fetches the PR
+# head only after the security scan and only when it has a validated patch.
 
 on:
   workflow_run:
@@ -43,9 +42,9 @@ jobs:
       contents: read
     steps:
       # Checkout is always the trusted base (workflow_run checks out the
-      # default branch; issue_comment and workflow_dispatch do too). The
-      # untrusted PR head is only fetched into .pr-head below for file reads.
-      # Never check out or build the PR head here.
+      # default branch; issue_comment and workflow_dispatch do too).
+      # Never build or run the PR head. The review script fetches the audited SHA
+      # into .pr-head only when it has a validated patch to apply.
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -54,8 +53,8 @@ jobs:
       - name: Setup Tools
         uses: TanStack/config/.github/setup@190f659075ff0845850e330883eb26d7ffd0671f # main
       - name: Build packages
-        run: pnpm exec nx run @tanstack/ai-grok-build:build
-      - name: Add PR head worktree
+        run: pnpm exec nx run-many -t build -p @tanstack/ai-grok-build @tanstack/ai-sandbox-docker
+      - name: Guard review
         id: guard
         env:
           AI_REVIEW_TOKEN: ${{ secrets.AI_REVIEW_TOKEN }}
@@ -91,9 +90,7 @@ jobs:
           if ! [[ "${PR_NUMBER}" =~ ^[0-9]+$ ]]; then
             skip "no pull request number in event"
           fi
-          git fetch origin "pull/${PR_NUMBER}/head:ai-review-pr-head"
-          git worktree add "${GITHUB_WORKSPACE}/.pr-head" ai-review-pr-head
-          SHA="$(git -C "${GITHUB_WORKSPACE}/.pr-head" rev-parse HEAD)"
+          SHA="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq '.head.sha')"
           LOGIN="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${SHA}" --jq '.author.login // empty' || true)"
           MACHINE="$(gh api user --jq .login)"
           echo "AI_REVIEW_HEAD_COMMIT_AUTHOR=${LOGIN}" >> "${GITHUB_ENV}"

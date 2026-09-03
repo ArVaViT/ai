@@ -10,6 +10,7 @@ The first lines of every bot comment say the comment is automated. It is not a m
 2. A PAT for that user, stored as repo secret `AI_REVIEW_TOKEN`. The PAT needs `repo` so it can approve waiting Actions runs.
 3. An xAI key, stored as repo secret `XAI_API_KEY`.
 4. Set `AI_REVIEW_MACHINE_USER` in the workflow to that user's login (default `tanstack-ai-bot`).
+5. Docker on the review runner.
 
 Until both secrets exist, the job skips green. It does not comment as `github-actions[bot]`.
 
@@ -17,13 +18,28 @@ Until both secrets exist, the job skips green. It does not comment as `github-ac
 
 Two workflows split the job. `ai-review-signal` runs on every PR event with no secrets and only signals. Its completion starts `ai-review` on the base branch with secrets. No `pull_request_target` anywhere.
 
-Auto: the signal fires on opened, synchronize, ready_for_review, and labeled. Auto skips drafts, bot PRs, roster-maintainer PRs, the machine user's own head commit, and a head SHA this bot already reviewed. The bot never executes PR code.
+Auto: the signal fires on opened, synchronize, ready_for_review, and labeled for PRs that target `main`. Auto skips drafts, bot PRs, roster-maintainer PRs, the machine user's own head commit, and a head SHA this bot already reviewed. The bot never executes PR code.
 
 Manual: a run with the `ai-review` label on the PR, a `/ai-review` comment, or Actions `workflow_dispatch` skips nothing. Keep the label on the PR to re-review every push. Remove it to stop.
 
 A first-time fork PR needs one workflow approval. After any merged commit or PR, later runs are automatic.
 
 After a clean `ai-ready` scan, the bot approves the waiting Test checks.
+
+## Security boundary
+
+The host checks the PR before it starts Grok. The check fails closed when it finds:
+
+- A missing or oversized GitHub patch
+- A symlink, submodule, or new executable file
+- A changed workflow, agent instruction, hook, action, or release script
+- A new dependency in a `package.json` file
+- A lockfile change without a matching `package.json` change
+- A shell download, encoded PowerShell command, or reverse shell
+
+Grok clones the exact PR commit into a disposable Docker container. The container does not receive `AI_REVIEW_TOKEN`, mount host files, or get a `host.docker.internal` alias. It receives `XAI_API_KEY` and has network access because Grok needs the xAI API. The Docker provider cannot restrict network destinations. Docker protects the host token and files, but it does not protect the xAI key from code inside the container.
+
+Grok edits only its container clone. The host receives a unified diff after the review. Before the host applies that diff, it rejects large or malformed patches, sensitive files, package files, lockfiles, symlinks, binaries, path traversal, and the exact sandbox secret. The host then runs `git apply --check` before it applies, commits, or pushes the patch.
 
 ## Labels
 
@@ -46,7 +62,7 @@ When the verdict is `ai-ready` and a host scan finds no malware, the bot adds `s
 pnpm test:ai-review
 ```
 
-A full agent run needs `AI_REVIEW_TOKEN`, `XAI_API_KEY`, `GITHUB_EVENT_NAME`, `GITHUB_EVENT_PATH`, `GITHUB_REPOSITORY`, and `AI_REVIEW_WORKTREE` pointing at a checkout of the PR head. Do not run `pnpm install` in that worktree.
+A full agent run needs Docker, `AI_REVIEW_TOKEN`, `XAI_API_KEY`, `GITHUB_EVENT_NAME`, `GITHUB_EVENT_PATH`, `GITHUB_REPOSITORY`, and `AI_REVIEW_WORKTREE` pointing at a checkout of the PR head. Do not run `pnpm install` in that worktree.
 
 ## Failed run
 
@@ -58,6 +74,8 @@ Common causes:
 - Fork with maintainer edits off (comment is posted, label is `ai-needs-work`, no push)
 - `chat()` did not return a valid verdict object
 - Workspace setup failed to install the Grok CLI
+- The preflight check blocked the PR
+- The generated patch failed validation or `git apply --check`
 
 ## Layout
 

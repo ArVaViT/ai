@@ -194,6 +194,8 @@ The bot never GitHub-approves and never merges. The `ready-to-merge` label still
 
 If the bot pushes, it only commits bugs and suggestions the review listed. Maintainers can also start a run by adding the `ai-review` label, with a `/ai-review` comment, or from Actions (`workflow_dispatch`). A first-time fork PR needs one workflow approval first.
 
+The bot checks the PR before Grok starts. It blocks sensitive automation, agent instructions, symlinks, new executable files, new dependencies, and incomplete patches. Grok runs in a disposable Docker container without the bot's GitHub token. The host validates Grok's patch before it applies or pushes any edit.
+
 ## Adding a new provider adapter
 
 The pattern lives in `packages/ai-openai/`, `packages/ai-anthropic/`, `packages/ai-gemini/`, etc. New core adapters typically:

