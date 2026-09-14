@@ -7,7 +7,7 @@ name: AI review
 # the PR number from its event, never artifacts or PR code. It fetches the PR
 # head only after the security scan and only when it has a validated patch.
 
-on:
+on: # zizmor: ignore[dangerous-triggers] This job uses no artifacts or PR code.
   workflow_run:
     workflows: ['AI review signal']
     types: [completed]
@@ -91,10 +91,18 @@ jobs:
             skip "no pull request number in event"
           fi
           SHA="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq '.head.sha')"
+          if ! [[ "${SHA}" =~ ^[0-9a-f]{40}$ ]]; then
+            skip "invalid pull request head SHA"
+          fi
           LOGIN="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${SHA}" --jq '.author.login // empty' || true)"
           MACHINE="$(gh api user --jq .login)"
-          echo "AI_REVIEW_HEAD_COMMIT_AUTHOR=${LOGIN}" >> "${GITHUB_ENV}"
-          echo "AI_REVIEW_MACHINE_USER=${MACHINE}" >> "${GITHUB_ENV}"
+          LOGIN_PATTERN='^[A-Za-z0-9]([A-Za-z0-9-]{0,37}[A-Za-z0-9])?$'
+          if { [ -n "${LOGIN}" ] && ! [[ "${LOGIN}" =~ ${LOGIN_PATTERN} ]]; } ||
+            ! [[ "${MACHINE}" =~ ${LOGIN_PATTERN} ]]; then
+            skip "invalid GitHub login"
+          fi
+          echo "head_commit_author=${LOGIN}" >> "${GITHUB_OUTPUT}"
+          echo "machine_user=${MACHINE}" >> "${GITHUB_OUTPUT}"
           echo "proceed=true" >> "${GITHUB_OUTPUT}"
       - name: Run review
         if: steps.guard.outputs.proceed == 'true'
@@ -103,3 +111,5 @@ jobs:
           AI_REVIEW_TOKEN: ${{ secrets.AI_REVIEW_TOKEN }}
           XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
           AI_REVIEW_WORKTREE: ${{ github.workspace }}/.pr-head
+          AI_REVIEW_HEAD_COMMIT_AUTHOR: ${{ steps.guard.outputs.head_commit_author }}
+          AI_REVIEW_MACHINE_USER: ${{ steps.guard.outputs.machine_user }}
