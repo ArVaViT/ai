@@ -362,9 +362,7 @@ describe('scanGeneratedDiff', () => {
       ),
     ).toEqual({
       ok: false,
-      reasons: [
-        'src/safe.ts: patch path headers do not match the file header',
-      ],
+      reasons: ['src/safe.ts: patch path headers do not match the file header'],
     })
   })
 
