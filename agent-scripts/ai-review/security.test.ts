@@ -125,21 +125,30 @@ describe('scanPullSecurity', () => {
     })
   })
 
-  it('blocks a lockfile change without a package manifest change', async () => {
+  it('blocks every lockfile change', async () => {
     const result = await auditPullSecurity(
-      packageClient('{}', '{}'),
+      packageClient(
+        '{"dependencies":{"react":"19.0.0"}}',
+        '{"dependencies":{"react":"19.1.0"}}',
+      ),
       'TanStack/ai',
       {
         baseSha: 'base-sha',
         headSha: 'head-sha',
         headRepo: 'alice/ai',
-        files: [{ path: 'pnpm-lock.yaml', patch: '@@ -1 +1 @@\n-old\n+new' }],
+        files: [
+          { path: 'package.json', patch: '@@ -1 +1 @@\n-old\n+new' },
+          {
+            path: 'pnpm-lock.yaml',
+            patch: '@@ -1 +1 @@\n-old\n+new',
+          },
+        ],
       },
     )
 
     expect(result).toEqual({
       ok: false,
-      reasons: ['pnpm-lock.yaml: lockfile change has no package.json change'],
+      reasons: ['pnpm-lock.yaml: lockfile changes require manual review'],
     })
   })
 
@@ -344,6 +353,27 @@ describe('scanGeneratedDiff', () => {
         reasons: ['generated diff has content before its first file header'],
       },
     )
+  })
+
+  it('blocks patch path headers that target a different file', () => {
+    expect(
+      scanGeneratedDiff(
+        'diff --git a/src/safe.ts b/src/safe.ts\n--- a/src/safe.ts\n+++ b/.github/workflows/ci.yml\n@@ -1 +1 @@\n-old\n+new\n',
+      ),
+    ).toEqual({
+      ok: false,
+      reasons: [
+        'src/safe.ts: patch path headers do not match the file header',
+      ],
+    })
+  })
+
+  it('allows valid create and delete patch headers', () => {
+    expect(
+      scanGeneratedDiff(
+        'diff --git a/src/new.ts b/src/new.ts\nnew file mode 100644\n--- /dev/null\n+++ b/src/new.ts\n@@ -0,0 +1 @@\n+new\ndiff --git a/src/old.ts b/src/old.ts\ndeleted file mode 100644\n--- a/src/old.ts\n+++ /dev/null\n@@ -1 +0,0 @@\n-old\n',
+      ),
+    ).toEqual({ ok: true, reasons: [] })
   })
 
   it('blocks generated package manifest changes', () => {

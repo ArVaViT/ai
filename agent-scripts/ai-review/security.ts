@@ -219,6 +219,23 @@ export function scanGeneratedDiff(diff: string, secrets: Array<string> = []) {
       reasons.push(`${path}: generated edits cannot change package manifests`)
       continue
     }
+    const headerBlock = section.split(/^@@/m, 1)[0] ?? ''
+    const patchOldPath = /^--- (.+)$/m.exec(headerBlock)?.[1]
+    const patchNewPath = /^\+\+\+ (.+)$/m.exec(headerBlock)?.[1]
+    const normalPaths =
+      patchOldPath === `a/${oldPath}` && patchNewPath === `b/${path}`
+    const createdPath =
+      /^new file mode /m.test(headerBlock) &&
+      patchOldPath === '/dev/null' &&
+      patchNewPath === `b/${path}`
+    const deletedPath =
+      /^deleted file mode /m.test(headerBlock) &&
+      patchOldPath === `a/${oldPath}` &&
+      patchNewPath === '/dev/null'
+    if (!normalPaths && !createdPath && !deletedPath) {
+      reasons.push(`${path}: patch path headers do not match the file header`)
+      continue
+    }
     files.push({ path, patch: section })
   }
   reasons.push(...scanPullSecurity(files).reasons)
@@ -329,11 +346,9 @@ export async function auditPullSecurity(
   const packageFiles = pull.files.filter((file) =>
     /(^|\/)package\.json$/.test(file.path),
   )
-  if (packageFiles.length === 0) {
-    for (const file of pull.files) {
-      if (LOCKFILE.test(file.path)) {
-        reasons.push(`${file.path}: lockfile change has no package.json change`)
-      }
+  for (const file of pull.files) {
+    if (LOCKFILE.test(file.path)) {
+      reasons.push(`${file.path}: lockfile changes require manual review`)
     }
   }
   for (const file of packageFiles) {
