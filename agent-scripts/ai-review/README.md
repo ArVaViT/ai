@@ -20,7 +20,7 @@ Two workflows split the job. `ai-review-signal` runs on every PR event with no s
 
 Auto: the signal fires on opened, synchronize, ready_for_review, and labeled for PRs that target `main`. Auto skips drafts, bot PRs, roster-maintainer PRs, the machine user's own head commit, and a head SHA this bot already reviewed. The bot never executes PR code.
 
-Manual: a run with the `ai-review` label on the PR, a `/ai-review` comment, or Actions `workflow_dispatch` skips nothing. Keep the label on the PR to re-review every push. Remove it to stop.
+Manual: a run with the `ai-review` label on the PR, a `/ai-review` comment, or Actions `workflow_dispatch` bypasses the auto-only draft, author, and reviewed-SHA skips. Keep the label on the PR to re-review every push. Remove it to stop.
 
 A first-time fork PR needs one workflow approval. After any merged commit or PR, later runs are automatic.
 
@@ -30,7 +30,7 @@ After a clean `ai-ready` scan, the bot approves the waiting Test checks.
 
 The host checks the PR before it starts Grok. The check fails closed when it finds:
 
-- A missing or oversized GitHub patch
+- A missing GitHub patch
 - A symlink, submodule, or new executable file
 - A changed workflow, agent instruction, hook, action, or release script
 - A new dependency in a `package.json` file
@@ -62,7 +62,7 @@ When the verdict is `ai-ready` and a host scan finds no malware, the bot adds `s
 pnpm test:ai-review
 ```
 
-A full agent run needs Docker, `AI_REVIEW_TOKEN`, `XAI_API_KEY`, `GITHUB_EVENT_NAME`, `GITHUB_EVENT_PATH`, `GITHUB_REPOSITORY`, and `AI_REVIEW_WORKTREE` pointing at a checkout of the PR head. Do not run `pnpm install` in that worktree.
+A full agent run needs Docker, `AI_REVIEW_TOKEN`, `XAI_API_KEY`, `GITHUB_EVENT_NAME`, `GITHUB_EVENT_PATH`, `GITHUB_REPOSITORY`, and `AI_REVIEW_WORKTREE` set to the path where a temporary PR worktree can be created. Do not run `pnpm install` in that worktree.
 
 ## Failed run
 
