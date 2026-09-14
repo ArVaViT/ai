@@ -114,9 +114,7 @@ export function parseReviewEvent(input: { eventName: string; event: unknown }) {
           ? run.pull_requests
           : []
       const first = pulls[0]
-      const prNumber = parsePrNumber(
-        isRecord(first) ? first.number : undefined,
-      )
+      const prNumber = parsePrNumber(isRecord(first) ? first.number : undefined)
       if (prNumber === null) {
         throw new Error(
           'workflow_run event is missing workflow_run.pull_requests[0].number',
