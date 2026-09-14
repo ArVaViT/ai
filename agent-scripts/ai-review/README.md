@@ -34,7 +34,7 @@ The host checks the PR before it starts Grok. The check fails closed when it fin
 - A symlink, submodule, or new executable file
 - A changed workflow, agent instruction, hook, action, or release script
 - A new dependency in a `package.json` file
-- A lockfile change without a matching `package.json` change
+- A lockfile change
 - A shell download, encoded PowerShell command, or reverse shell
 
 Grok clones the exact PR commit into a disposable Docker container. The container does not receive `AI_REVIEW_TOKEN`, mount host files, or get a `host.docker.internal` alias. It receives `XAI_API_KEY` and has network access because Grok needs the xAI API. The Docker provider cannot restrict network destinations. Docker protects the host token and files, but it does not protect the xAI key from code inside the container.

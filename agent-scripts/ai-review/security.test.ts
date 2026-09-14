@@ -152,6 +152,30 @@ describe('scanPullSecurity', () => {
     })
   })
 
+  it('blocks a lockfile renamed to a non-lockfile path', async () => {
+    const result = await auditPullSecurity(
+      packageClient('{}', '{}'),
+      'TanStack/ai',
+      {
+        baseSha: 'base-sha',
+        headSha: 'head-sha',
+        headRepo: 'alice/ai',
+        files: [
+          {
+            path: 'old-lockfile.yaml',
+            previousPath: 'pnpm-lock.yaml',
+            patch: '@@ -1 +1 @@\n-old\n+new',
+          },
+        ],
+      },
+    )
+
+    expect(result).toEqual({
+      ok: false,
+      reasons: ['pnpm-lock.yaml: lockfile changes require manual review'],
+    })
+  })
+
   it('blocks a symlink reported by the Git tree', async () => {
     const client: GitHubClient = {
       graphql() {

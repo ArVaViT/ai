@@ -347,8 +347,15 @@ export async function auditPullSecurity(
     /(^|\/)package\.json$/.test(file.path),
   )
   for (const file of pull.files) {
-    if (LOCKFILE.test(file.path)) {
-      reasons.push(`${file.path}: lockfile changes require manual review`)
+    const previousPath = file.previousPath
+    const lockfilePath =
+      previousPath !== undefined &&
+      previousPath !== null &&
+      LOCKFILE.test(previousPath)
+        ? previousPath
+        : file.path
+    if (LOCKFILE.test(lockfilePath)) {
+      reasons.push(`${lockfilePath}: lockfile changes require manual review`)
     }
   }
   for (const file of packageFiles) {
