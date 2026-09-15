@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process'
 import { describe, expect, it } from 'vitest'
 import type { GitHubClient } from '../../scripts/maintainer/github.ts'
 import {
@@ -323,6 +324,46 @@ describe('scanPullSecurity', () => {
 })
 
 describe('scanGeneratedDiff', () => {
+  it('blocks a second patch without a diff --git header', () => {
+    const patch =
+      'diff --git a/src/safe.txt b/src/safe.txt\n--- a/src/safe.txt\n+++ b/src/safe.txt\n@@ -1 +1 @@\n-old\n+new\n--- a/.github/workflows/probe.yml\n+++ b/.github/workflows/probe.yml\n@@ -1 +1 @@\n-old\n+new\n'
+    const parsed = spawnSync('git', ['apply', '--numstat', '-z', '-'], {
+      input: patch,
+      encoding: 'utf8',
+    })
+
+    expect(parsed.status, parsed.stderr).toBe(0)
+    expect(parsed.stdout).toBe(
+      '1\t1\tsrc/safe.txt\0' + '1\t1\t.github/workflows/probe.yml\0',
+    )
+    expect(scanGeneratedDiff(patch).ok).toBe(false)
+  })
+
+  it('allows header-shaped source lines within a hunk', () => {
+    expect(
+      scanGeneratedDiff(
+        'diff --git a/src/safe.txt b/src/safe.txt\n--- a/src/safe.txt\n+++ b/src/safe.txt\n@@ -1 +1 @@\n--- old source\n+++ new source\n',
+      ),
+    ).toEqual({ ok: true, reasons: [] })
+  })
+
+  it('allows multiple hunks with context and missing final newlines', () => {
+    const patch =
+      'diff --git a/src/safe.txt b/src/safe.txt\n--- a/src/safe.txt\n+++ b/src/safe.txt\n@@ -1,2 +1,2 @@\n context\n-old\n+new\n@@ -10 +10 @@\n-old end\n\\ No newline at end of file\n+new end\n\\ No newline at end of file\n'
+
+    expect(scanGeneratedDiff(patch)).toEqual({ ok: true, reasons: [] })
+  })
+
+  it.each([
+    '--- a/src/safe.txt\n+++ b/src/safe.txt\n--- a/src/safe.txt\n+++ b/src/safe.txt\n@@ -1 +1 @@\n-old\n+new\n',
+    'rename from src/safe.txt\nrename to .github/workflows/probe.yml\n--- a/src/safe.txt\n+++ b/src/safe.txt\n@@ -1 +1 @@\n-old\n+new\n',
+    '--- a/src/safe.txt\n+++ b/src/safe.txt\n@@ -1,2 +1 @@\n-old\n+new\n',
+  ])('rejects ambiguous headers or incomplete hunks: %s', (body) => {
+    expect(
+      scanGeneratedDiff(`diff --git a/src/safe.txt b/src/safe.txt\n${body}`).ok,
+    ).toBe(false)
+  })
+
   it('allows a normal source edit', () => {
     expect(
       scanGeneratedDiff(

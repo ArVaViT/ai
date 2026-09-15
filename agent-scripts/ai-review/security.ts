@@ -220,8 +220,10 @@ export function scanGeneratedDiff(diff: string, secrets: Array<string> = []) {
       continue
     }
     const headerBlock = section.split(/^@@/m, 1)[0] ?? ''
-    const patchOldPath = /^--- (.+)$/m.exec(headerBlock)?.[1]
-    const patchNewPath = /^\+\+\+ (.+)$/m.exec(headerBlock)?.[1]
+    const oldHeaders = [...headerBlock.matchAll(/^--- (.+)$/gm)]
+    const newHeaders = [...headerBlock.matchAll(/^\+\+\+ (.+)$/gm)]
+    const patchOldPath = oldHeaders[0]?.[1]
+    const patchNewPath = newHeaders[0]?.[1]
     const normalPaths =
       patchOldPath === `a/${oldPath}` && patchNewPath === `b/${path}`
     const createdPath =
@@ -232,8 +234,53 @@ export function scanGeneratedDiff(diff: string, secrets: Array<string> = []) {
       /^deleted file mode /m.test(headerBlock) &&
       patchOldPath === `a/${oldPath}` &&
       patchNewPath === '/dev/null'
-    if (!normalPaths && !createdPath && !deletedPath) {
+    if (
+      oldHeaders.length !== 1 ||
+      newHeaders.length !== 1 ||
+      (!normalPaths && !createdPath && !deletedPath) ||
+      /^(?:rename|copy) (?:from|to) /m.test(headerBlock)
+    ) {
       reasons.push(`${path}: patch path headers do not match the file header`)
+      continue
+    }
+    // Hunk counts distinguish source lines from an extra headerless file patch.
+    const lines = section.slice(headerBlock.length).split('\n')
+    if (lines.at(-1) === '') lines.pop()
+    let oldLines = 0
+    let newLines = 0
+    let validHunks = lines[0]?.startsWith('@@ ') === true
+    let previousBodyLine = false
+    for (const line of lines) {
+      if (line.startsWith('@@')) {
+        const hunk = /^@@ -\d+(?:,(\d+))? \+\d+(?:,(\d+))? @@(?:.*)$/.exec(line)
+        if (hunk === null || oldLines !== 0 || newLines !== 0) {
+          validHunks = false
+          break
+        }
+        oldLines = Number(hunk[1] ?? 1)
+        newLines = Number(hunk[2] ?? 1)
+        previousBodyLine = false
+        continue
+      }
+      if (line === '\\ No newline at end of file' && previousBodyLine) {
+        previousBodyLine = false
+        continue
+      }
+      const prefix = line[0]
+      if (prefix !== ' ' && prefix !== '-' && prefix !== '+') {
+        validHunks = false
+        break
+      }
+      if (prefix !== '+') oldLines -= 1
+      if (prefix !== '-') newLines -= 1
+      if (oldLines < 0 || newLines < 0) {
+        validHunks = false
+        break
+      }
+      previousBodyLine = true
+    }
+    if (!validHunks || oldLines !== 0 || newLines !== 0) {
+      reasons.push(`${path}: malformed hunks or extra file patch`)
       continue
     }
     files.push({ path, patch: section })

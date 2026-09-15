@@ -28,7 +28,7 @@ After a clean `ai-ready` scan, the bot approves the waiting Test checks.
 
 ## Security boundary
 
-The host checks the PR before it starts Grok. The check fails closed when it finds:
+Before a new audit, the host removes stale `secure` and `ai-ready` labels. It checks the PR before it starts Grok. The check fails closed when it finds:
 
 - A missing GitHub patch
 - A symlink, submodule, or new executable file
@@ -39,7 +39,9 @@ The host checks the PR before it starts Grok. The check fails closed when it fin
 
 Grok clones the exact PR commit into a disposable Docker container. The container does not receive `AI_REVIEW_TOKEN`, mount host files, or get a `host.docker.internal` alias. It receives `XAI_API_KEY` and has network access because Grok needs the xAI API. The Docker provider cannot restrict network destinations. Docker protects the host token and files, but it does not protect the xAI key from code inside the container.
 
-Grok edits only its container clone. The host receives a unified diff after the review. Before the host applies that diff, it rejects large or malformed patches, sensitive files, package files, lockfiles, symlinks, binaries, path traversal, and the exact sandbox secret. The host then runs `git apply --check` before it applies, commits, or pushes the patch.
+Grok edits only its container clone. The host receives a unified diff after the review. Before the host applies that diff, it rejects large or malformed patches, sensitive files, package files, lockfiles, symlinks, binaries, path traversal, and the exact sandbox secret. Each file needs its own matching headers and complete hunks. The host then runs `git apply --check` before it applies, commits, or pushes the patch.
+
+Before it publishes a verdict, the host checks that the PR still targets `main` and has the expected head SHA. After a polish push, the expected SHA is the new commit. A changed head receives no verdict from the old review.
 
 ## Labels
 

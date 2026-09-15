@@ -302,9 +302,6 @@ export async function runReviewJob(opts: {
   }
 
   const pr = await fetchPullRequest(opts.client, opts.repo, parsed.prNumber)
-  if (pr.baseRef !== 'main') {
-    return { skipped: true as const, reason: 'not-main' }
-  }
   // A workflow_run cannot say why the signal fired, so the ai-review label
   // on the PR means manual: only maintainers can label, and it opts the PR
   // into a review on every push until it is removed.
@@ -313,14 +310,6 @@ export async function runReviewJob(opts: {
     pr.labels.includes(AI_REVIEW_TRIGGER_LABEL)
       ? 'manual'
       : parsed.mode
-  const security = await auditPullSecurity(opts.client, opts.repo, pr)
-  if (!security.ok) {
-    return {
-      skipped: true as const,
-      reason: 'security-blocked',
-      security,
-    }
-  }
   const skip = shouldSkip({
     mode,
     isDraft: pr.isDraft,
@@ -331,6 +320,35 @@ export async function runReviewJob(opts: {
     machineUserLogin: opts.machineUserLogin,
     config: opts.config,
   })
+  const alreadyReviewed =
+    skip.skip && pr.headSha === opts.alreadyReviewedSha && pr.baseRef === 'main'
+  if (alreadyReviewed) {
+    return { skipped: true as const, reason: skip.reason }
+  }
+  const staleLabels = ['secure', 'ai-ready']
+  for (const label of staleLabels) {
+    try {
+      await opts.client.rest(
+        'DELETE',
+        `/repos/${opts.repo}/issues/${pr.number}/labels/${label}`,
+      )
+    } catch (error) {
+      const missingLabel =
+        error instanceof Error && error.message.includes('HTTP 404')
+      if (!missingLabel) throw error
+    }
+  }
+  if (pr.baseRef !== 'main') {
+    return { skipped: true as const, reason: 'not-main' }
+  }
+  const security = await auditPullSecurity(opts.client, opts.repo, pr)
+  if (!security.ok) {
+    return {
+      skipped: true as const,
+      reason: 'security-blocked',
+      security,
+    }
+  }
   if (skip.skip) {
     return { skipped: true as const, reason: skip.reason }
   }
@@ -364,6 +382,7 @@ export async function runReviewJob(opts: {
   }
 
   let pushLanded = false
+  let reviewedSha = pr.headSha
   const canPushPolish =
     verdict.verdict === 'polish' &&
     pr.maintainerCanModify &&
@@ -385,6 +404,14 @@ export async function runReviewJob(opts: {
       },
     )
     if (commit.committed) {
+      const head = await opts.gitRunner(
+        ['rev-parse', 'HEAD'],
+        opts.worktreeRoot,
+      )
+      reviewedSha = head.stdout.trim()
+      if (head.code !== 0 || !/^[0-9a-f]{40}$/i.test(reviewedSha)) {
+        throw new Error('could not read the polish commit SHA')
+      }
       await pushHead(opts.worktreeRoot, opts.gitRunner, {
         remoteUrl: headRemoteUrl({
           isFork: pr.headRepo !== opts.repo,
@@ -399,6 +426,10 @@ export async function runReviewJob(opts: {
     pushLanded = commit.committed
   }
 
+  const currentPr = await fetchPullRequest(opts.client, opts.repo, pr.number)
+  if (currentPr.headSha !== reviewedSha || currentPr.baseRef !== 'main') {
+    return { skipped: true as const, reason: 'head-changed' }
+  }
   const label = reviewLabelFor(verdict.verdict, pushLanded)
   let approvedRuns = 0
   let approveError: string | null = null
@@ -407,7 +438,7 @@ export async function runReviewJob(opts: {
       approvedRuns = await approveWaitingWorkflows(
         opts.client,
         opts.repo,
-        pr.headSha,
+        reviewedSha,
       )
     } catch (error) {
       approveError = error instanceof Error ? error.message : String(error)
@@ -423,7 +454,7 @@ export async function runReviewJob(opts: {
   }
   const body = buildReviewComment({
     verdict: verdict.verdict,
-    headSha: pr.headSha,
+    headSha: reviewedSha,
     findings,
     pushNote: pushNoteFor({
       pushLanded,
@@ -585,7 +616,7 @@ export async function main() {
   })
   if (result.skipped) {
     console.log(`ai-review skipped: ${result.reason}`)
-    if ('security' in result) {
+    if ('security' in result && result.security !== undefined) {
       for (const reason of result.security.reasons) {
         console.log(`ai-review security: ${reason}`)
       }
