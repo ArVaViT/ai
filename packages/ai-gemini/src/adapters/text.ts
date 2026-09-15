@@ -112,8 +112,8 @@ function contentPartToInteraction(part: ContentPart): InteractionContent {
     source.type === 'data'
       ? source.mimeType
       : (source.mimeType ?? DEFAULT_MEDIA_MIME_TYPES[part.type])
-  // A Gemini Files API reference maps to the `uri` field, same as a public
-  // URL; `fileReferenceFor` throws when the file was never uploaded to Gemini.
+  // A Gemini Files API handle maps to the `uri` field, same as a public URL;
+  // `fileReferenceFor` throws when another provider issued it.
   const base = isFileSource(source)
     ? { uri: fileReferenceFor(source, 'gemini'), mime_type: mimeType }
     : source.type === 'data'
@@ -827,8 +827,8 @@ export class GeminiTextAdapter<
       case 'document': {
         // File references (Gemini Files API) and public URLs both pass
         // through as `fileData`; Gemini fetches the URI server-side. A
-        // file source resolves to this adapter's own reference entry
-        // (throws when the file was never uploaded to Gemini).
+        // file source's handle is the file URI (throws when another provider
+        // issued it).
         const fileUri = isFileSource(part.source)
           ? fileReferenceFor(part.source, this.name)
           : part.source.value
