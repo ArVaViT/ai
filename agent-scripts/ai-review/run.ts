@@ -321,7 +321,10 @@ export async function runReviewJob(opts: {
     config: opts.config,
   })
   const alreadyReviewed =
-    skip.skip && pr.headSha === opts.alreadyReviewedSha && pr.baseRef === 'main'
+    skip.skip &&
+    !pr.isDraft &&
+    pr.headSha === opts.alreadyReviewedSha &&
+    pr.baseRef === 'main'
   if (alreadyReviewed) {
     return { skipped: true as const, reason: skip.reason }
   }

@@ -28,7 +28,7 @@ After a clean `ai-ready` scan, the bot approves the waiting Test checks.
 
 ## Security boundary
 
-Before a new audit, the host removes stale `secure` and `ai-ready` labels. It checks the PR before it starts Grok. The check fails closed when it finds:
+Before a new audit, the host removes stale `secure` and `ai-ready` labels. An automatic run for a draft also removes these labels, even when its SHA is unchanged. It checks the PR before it starts Grok. The check fails closed when it finds:
 
 - A missing GitHub patch
 - A symlink, submodule, or new executable file

@@ -432,16 +432,19 @@ describe('runReviewJob', () => {
     expect([...issueLabels]).toEqual(['secure', 'ai-ready', 'bug'])
   })
 
-  it('clears stale readiness when a changed head is skipped', async () => {
-    const { result, issueLabels } = await runJob({
-      pull: samplePull({ draft: true }),
-      alreadyReviewedSha: 'd'.repeat(40),
-      initialIssueLabels: ['secure', 'ai-ready', 'bug'],
-    })
+  it.each([SHA, 'd'.repeat(40)])(
+    'clears draft readiness with reviewed SHA %s',
+    async (alreadyReviewedSha) => {
+      const { result, issueLabels } = await runJob({
+        pull: samplePull({ draft: true }),
+        alreadyReviewedSha,
+        initialIssueLabels: ['secure', 'ai-ready', 'bug'],
+      })
 
-    expect(result).toEqual({ skipped: true, reason: 'draft' })
-    expect([...issueLabels]).toEqual(['bug'])
-  })
+      expect(result).toEqual({ skipped: true, reason: 'draft' })
+      expect([...issueLabels]).toEqual(['bug'])
+    },
+  )
 
   it('skips a pull request that does not target main', async () => {
     const { result, comments, gitCalls } = await runJob({
