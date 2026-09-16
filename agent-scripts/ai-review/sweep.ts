@@ -25,8 +25,10 @@ import {
   fetchAlreadyReviewedSha,
   requireEnv,
   resolveReviewToken,
-  runReviewJob,
+  reviewPull,
 } from './run.ts'
+import { resultsPath, writeResults } from './results.ts'
+import type { ReviewedPull } from './results.ts'
 import { shouldSkip } from './skip.ts'
 import type { GitRunner } from './git.ts'
 
@@ -209,8 +211,12 @@ async function fetchMachineUserLogin(client: GitHubClient) {
 }
 
 /**
- * Production entry. Needs `AI_REVIEW_TOKEN` (or a resolvable GitHub token)
- * and `XAI_API_KEY`.
+ * Review entry for the scheduled sweep.
+ *
+ * Runs the agent over each selected PR and writes `AI_REVIEW_RESULTS` for the
+ * publish job. Holds no PAT: every GitHub write happens later, in
+ * `publish.ts`, so the credential is never in a process tree next to the
+ * agent. Needs `XAI_API_KEY` and a readable GitHub token.
  */
 export async function main() {
   const token = await resolveReviewToken()
@@ -219,7 +225,10 @@ export async function main() {
   const client = createGitHubClient({ token })
   const repo = process.env.GITHUB_REPOSITORY ?? config.repo
   const repoRoot = process.env.GITHUB_WORKSPACE ?? process.cwd()
-  const machineUserLogin = await fetchMachineUserLogin(client)
+  // Read from env, not from `/user`: that call needs the PAT this job does
+  // not have. `publish.ts` resolves the real login when it comments.
+  const machineUserLogin =
+    process.env.AI_REVIEW_MACHINE_USER ?? 'tanstack-ai-bot'
   const limit = parseSweepLimit(process.env.AI_REVIEW_SWEEP_LIMIT)
 
   const open = await listOpenPulls(client, repo)
@@ -250,6 +259,7 @@ export async function main() {
 
   const gitRunner = createProcessGitRunner()
   const review = createGrokReview()
+  const results: Array<ReviewedPull> = []
   let failures = 0
   for (const pull of selected) {
     const worktreePath = join(repoRoot, `.pr-${String(pull.number)}`)
@@ -260,10 +270,9 @@ export async function main() {
       runner: gitRunner,
     })
     try {
-      const result = await runReviewJob({
+      const outcome = await reviewPull({
         client,
         repo,
-        token,
         config,
         eventName: 'pull_request',
         event: { pull_request: { number: pull.number } },
@@ -278,11 +287,16 @@ export async function main() {
           pull.headSha,
         ),
       })
-      console.log(
-        result.skipped
-          ? `ai-review sweep skip #${String(pull.number)}: ${result.reason}`
-          : `ai-review sweep done #${String(pull.number)} label=${result.label} push=${String(result.pushLanded)}`,
-      )
+      if (outcome.reviewed) {
+        results.push(outcome.result)
+        console.log(
+          `ai-review sweep reviewed #${String(pull.number)} verdict=${outcome.result.verdict.verdict}`,
+        )
+      } else {
+        console.log(
+          `ai-review sweep skip #${String(pull.number)}: ${outcome.reason}`,
+        )
+      }
     } catch (error) {
       // One bad PR must not stop the sweep. The run still exits non-zero.
       failures += 1
@@ -296,6 +310,10 @@ export async function main() {
       })
     }
   }
+
+  // Always written, even when empty: the publish job reads it every run, and
+  // it still has rejection comments to post for PRs the scan blocked.
+  await writeResults(resultsPath(), { results })
   if (failures > 0) {
     throw new Error(`ai-review sweep: ${String(failures)} review(s) failed`)
   }

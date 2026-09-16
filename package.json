@@ -30,6 +30,7 @@
     "test:ai-review": "vitest run --root agent-scripts/ai-review",
     "ai-review": "tsx agent-scripts/ai-review/run.ts",
     "ai-review:sweep": "tsx agent-scripts/ai-review/sweep.ts",
+    "ai-review:publish": "tsx agent-scripts/ai-review/publish.ts",
     "maintainer:sweep": "tsx scripts/maintainer/sweep.ts",
     "maintainer:scorecard": "tsx scripts/maintainer/scorecard.ts",
     "test:kiira": "kiira check",
