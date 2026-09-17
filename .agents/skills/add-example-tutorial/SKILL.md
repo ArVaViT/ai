@@ -1,6 +1,6 @@
 ---
 name: add-example-tutorial
-description: "Use when adding a public teaching example, a docs tutorial, or wiring an example onto tanstack.com (Examples tab or a live sandbox on a docs page). Don't use for an internal Nx playground (that is new-react-playground), for a package API change with no walkthrough, or for a docs-only copy edit."
+description: "Use when adding a public teaching example or a docs tutorial. Don't use for an internal Nx playground (that is new-react-playground), for a package API change with no walkthrough, or for a docs-only copy edit."
 ---
 
 # Add Example Tutorial
@@ -18,7 +18,7 @@ Load `docs`, `simple-english`, and `i-have-adhd` before writing tutorial pages. 
 - Overview / Quick Start (and any recipe) point at the tutorial.
 - GitHub link at the bottom: `https://github.com/TanStack/ai/tree/main/examples/react/<slug>`.
 - Live sandbox comment on the tutorial page.
-- AI PR. After the tanstack.com AI sandbox PR is on `main`, a new React slug does not need a site PR.
+- One PR on this repo.
 
 ## 1. Shape the app
 
@@ -74,36 +74,21 @@ Point Overview and Quick Start at the tutorial. Cross-link any recipe that cover
 
 `examples/README.md`: list the new example.
 
-## 5. tanstack.com
-
-After PR https://github.com/TanStack/tanstack.com/pull/1275 is on `main`, do **not** open a tanstack.com PR for a new React example.
-
-The site synthesizes the Start WebContainer runtime for `libraryId=ai`, `framework=react`, and any kebab-case slug. It fetches `examples/react/<slug>` from the AI repo. `workspace:*` rewrite, starting path, and `::client-example` are already generic.
-
-In the AI repo, add:
-
-- `examples/react/<slug>/`
-- Tutorial + `<!-- ::client-example library=ai framework=react slug=<slug> -->`
-- `docs/config.json` Tutorial and Examples entries
-
-A Vue example, a non-kebab slug, or a different entry file still needs a site config row. If the tanstack.com fallback is missing on `origin/main`, stop and ask.
-
 ## PRs
 
 - Do not add tests under the example app.
 - Do not commit `docs/superpowers/`, plans, screenshots, or `.agent/`.
-- Example-only / docs / site wiring: no changeset unless a published package changed.
+- Example-only / docs: no changeset unless a published package changed.
 - Conventional commit. No `Co-authored-by`.
 - Fill the PR template honestly. Do not tick `test:pr` if it was not run.
 
 ## Common mistakes
 
-| Mistake                                          | Fix                                                       |
-| ------------------------------------------------ | --------------------------------------------------------- |
-| Copy Basic Chat file-for-file                    | Generate, then slim to this scenario                      |
-| Generate under `examples/<slug>`                 | The generator writes `examples/react/<slug>/`             |
-| Model const or extra handler file                | Inline the latest model id in the route                   |
-| BYOK files on a tutorial that does not need keys | Skip them                                                 |
-| Tutorial is only commands and code               | Problem, why, how, then each step as one piece            |
-| New slug only in the AI repo                     | Examples tab + sandbox comment in the AI repo             |
-| Open a tanstack.com PR for a new React slug      | Skip it. The site fallback covers `examples/react/<slug>` |
+| Mistake | Fix |
+|---|---|
+| Copy Basic Chat file-for-file | Generate, then slim to this scenario |
+| Generate under `examples/<slug>` | The generator writes `examples/react/<slug>/` |
+| Model const or extra handler file | Inline the latest model id in the route |
+| BYOK files on a tutorial that does not need keys | Skip them |
+| Tutorial is only commands and code | Problem, why, how, then each step as one piece |
+| Skip nav or the sandbox comment | Add the Examples tab child and the `::client-example` comment |
