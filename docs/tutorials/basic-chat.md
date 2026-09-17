@@ -31,7 +31,7 @@ Then install the TanStack AI packages:
 
 <!-- ::start:tabs variant="package-manager" mode="install" -->
 
-react: @tanstack/ai @tanstack/ai-react @tanstack/ai-client @tanstack/ai-openrouter
+react: @tanstack/ai @tanstack/ai-react @tanstack/ai-openrouter
 
 <!-- ::end:tabs -->
 
