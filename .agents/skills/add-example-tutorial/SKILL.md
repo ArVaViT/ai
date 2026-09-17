@@ -18,7 +18,7 @@ Load `docs`, `simple-english`, and `i-have-adhd` before writing tutorial pages. 
 - Overview / Quick Start (and any recipe) point at the tutorial.
 - GitHub link at the bottom: `https://github.com/TanStack/ai/tree/main/examples/react/<slug>`.
 - Live sandbox comment on the tutorial page.
-- AI PR + tanstack.com PR when a new slug must be registered. Merge AI first.
+- AI PR. After the tanstack.com AI sandbox PR is on `main`, a new React slug does not need a site PR.
 
 ## 1. Shape the app
 
@@ -74,23 +74,19 @@ Point Overview and Quick Start at the tutorial. Cross-link any recipe that cover
 
 `examples/README.md`: list the new example.
 
-## 5. tanstack.com sibling PR
+## 5. tanstack.com
 
-The player is generic. The allowlist is not.
+After PR https://github.com/TanStack/tanstack.com/pull/1275 is on `main`, do **not** open a tanstack.com PR for a new React example.
 
-Already on the site (do not redo unless missing on `origin/main`):
+The site synthesizes the Start WebContainer runtime for `libraryId=ai`, `framework=react`, and any kebab-case slug. It fetches `examples/react/<slug>` from the AI repo. `workspace:*` rewrite, starting path, and `::client-example` are already generic.
 
-- `<!-- ::client-example library framework slug -->` in `MdComponents.tsx`
-- `rewriteWorkspaceProtocolDependencies` for `@tanstack/ai*` `workspace:*` → `latest` inside `fetchClientExampleFiles`
-- `getExampleStartingPath(..., 'ai')` → `src/routes/index.tsx`
+In the AI repo, add:
 
-Still one row per slug: copy the Basic Chat WebContainer row in `src/utils/client-example-config.ts` and change `slug`. Keep `libraryId: 'ai'`, `framework: 'react'`, `entry: '/src/routes/index.tsx'`, `compatibility: 'tanstack-start-async-context'`, `pnpm install` / `pnpm run dev`. A Vue or different-entry example needs a matching config row, not a new embed component.
+- `examples/react/<slug>/`
+- Tutorial + `<!-- ::client-example library=ai framework=react slug=<slug> -->`
+- `docs/config.json` Tutorial and Examples entries
 
-Find the tanstack.com checkout as a sibling folder or worktree. If it is missing, stop and ask. Do not mix this work with unrelated dirty files. Branch from `origin/main`.
-
-Two PRs. Merge the AI PR first so GitHub has `examples/react/<slug>`. Link each PR from the other.
-
-A tutorial with no live sandbox and no Examples tab item does not need a tanstack.com PR.
+A Vue example, a non-kebab slug, or a different entry file still needs a site config row. If the tanstack.com fallback is missing on `origin/main`, stop and ask.
 
 ## PRs
 
@@ -102,12 +98,12 @@ A tutorial with no live sandbox and no Examples tab item does not need a tanstac
 
 ## Common mistakes
 
-| Mistake                                          | Fix                                            |
-| ------------------------------------------------ | ---------------------------------------------- |
-| Copy Basic Chat file-for-file                    | Generate, then slim to this scenario           |
-| Generate under `examples/<slug>`                 | The generator writes `examples/react/<slug>/`  |
-| Model const or extra handler file                | Inline the latest model id in the route        |
-| BYOK files on a tutorial that does not need keys | Skip them                                      |
-| Tutorial is only commands and code               | Problem, why, how, then each step as one piece |
-| New slug only in the AI repo                     | Allowlist row + Examples tab + sandbox comment |
-| Mix tanstack.com landing WIP into the sandbox PR | Fresh branch from `origin/main`                |
+| Mistake | Fix |
+|---|---|
+| Copy Basic Chat file-for-file | Generate, then slim to this scenario |
+| Generate under `examples/<slug>` | The generator writes `examples/react/<slug>/` |
+| Model const or extra handler file | Inline the latest model id in the route |
+| BYOK files on a tutorial that does not need keys | Skip them |
+| Tutorial is only commands and code | Problem, why, how, then each step as one piece |
+| New slug only in the AI repo | Examples tab + sandbox comment in the AI repo |
+| Open a tanstack.com PR for a new React slug | Skip it. The site fallback covers `examples/react/<slug>` |
