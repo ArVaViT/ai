@@ -8,12 +8,6 @@ import {
   type UIMessage,
 } from '@tanstack/ai-react'
 import { byok } from '@/lib/byok'
-import { CHAT_MODEL } from '@/lib/chat-model'
-
-const forwardedProps = {
-  provider: 'openrouter',
-  model: CHAT_MODEL,
-}
 
 function Messages({ messages }: { messages: Array<UIMessage> }) {
   const messagesContainerRef = useRef<HTMLDivElement>(null)
@@ -170,7 +164,10 @@ function ChatPage() {
   const { messages, sendMessage, isLoading, error, stop } = useChat({
     connection: fetchServerSentEvents('/api/chat'),
     byok,
-    forwardedProps,
+    forwardedProps: {
+      provider: 'openrouter',
+      model: 'openai/gpt-5.5',
+    },
   })
 
   const handleSendMessage = () => {

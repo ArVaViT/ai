@@ -26,15 +26,10 @@ This tutorial is React + Start. For other frameworks, open [Quick Start](../gett
 
 ## 1. Stream from a Start route
 
-Put the model id in `src/lib/chat-model.ts`:
+Put this in `src/routes/api.chat.ts`. It reads the chat body and the OpenRouter key. Then it returns an SSE stream.
 
 ```typescript
-export const CHAT_MODEL = 'openai/gpt-4o'
-```
-
-Put this handler in `src/lib/handle-chat-post.ts`. It reads the chat body and the OpenRouter key. Then it returns an SSE stream.
-
-```typescript
+import { createFileRoute } from '@tanstack/react-router'
 import {
   chat,
   chatParamsFromRequest,
@@ -43,39 +38,31 @@ import {
 import { createOpenRouterText } from '@tanstack/ai-openrouter'
 import { openrouterByok } from '@tanstack/ai-openrouter/byok'
 import { byokMissing, getByokKey } from '@tanstack/ai/byok/server'
-import { CHAT_MODEL } from './chat-model'
 
-export async function handleChatPost(request: Request) {
+export async function POST({ request }: { request: Request }) {
   const params = await chatParamsFromRequest(request)
   const apiKey = getByokKey(request, openrouterByok)
   if (!apiKey) return byokMissing(openrouterByok)
 
   const stream = chat({
-    adapter: createOpenRouterText(CHAT_MODEL, apiKey),
+    adapter: createOpenRouterText('openai/gpt-5.5', apiKey),
     messages: params.messages,
     threadId: params.threadId,
     runId: params.runId,
   })
   return toServerSentEventsResponse(stream)
 }
-```
-
-If the key is missing, `byokMissing` returns HTTP 401.
-
-Mount the handler on `POST /api/chat` in `src/routes/api.chat.ts`:
-
-```typescript
-import { createFileRoute } from '@tanstack/react-router'
-import { handleChatPost } from '../lib/handle-chat-post'
 
 export const Route = createFileRoute('/api/chat')({
   server: {
     handlers: {
-      POST: ({ request }) => handleChatPost(request),
+      POST,
     },
   },
 })
 ```
+
+If the key is missing, `byokMissing` returns HTTP 401.
 
 ## 2. Render with `useChat`
 
@@ -83,7 +70,7 @@ Call `useChat` on the home route with:
 
 - `connection`: `fetchServerSentEvents('/api/chat')`
 - `byok`: the BYOK store
-- `forwardedProps`: provider `openrouter` and model `openai/gpt-4o`
+- `forwardedProps`: provider `openrouter` and model `openai/gpt-5.5`
 
 Put this in `src/routes/index.tsx`. The `byok` import is the next file.
 
@@ -97,12 +84,6 @@ import {
   useChat,
 } from '@tanstack/ai-react'
 import { byok } from '@/lib/byok'
-import { CHAT_MODEL } from '@/lib/chat-model'
-
-const forwardedProps = {
-  provider: 'openrouter',
-  model: CHAT_MODEL,
-}
 
 function OpenRouterKeyForm() {
   const snapshot = useByok(byok)
@@ -152,7 +133,10 @@ function ChatPage() {
   const { messages, sendMessage, isLoading, error, stop } = useChat({
     connection: fetchServerSentEvents('/api/chat'),
     byok,
-    forwardedProps,
+    forwardedProps: {
+      provider: 'openrouter',
+      model: 'openai/gpt-5.5',
+    },
   })
 
   const handleSendMessage = () => {

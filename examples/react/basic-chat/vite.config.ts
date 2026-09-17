@@ -16,6 +16,13 @@ for (const name of ['.env.local', '.env']) {
 export default defineConfig({
   resolve: { tsconfigPaths: true },
   server: { port: 3100 },
-  plugins: [tailwindcss(), tanstackStart(), nitro(), viteReact()],
+  plugins: [
+    tailwindcss(),
+    tanstackStart({
+      router: { routeFileIgnorePattern: '\\.test\\.ts$' },
+    }),
+    nitro(),
+    viteReact(),
+  ],
   nitro: {},
 })

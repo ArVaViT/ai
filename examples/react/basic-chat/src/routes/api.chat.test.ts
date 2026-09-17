@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { handleChatPost } from './handle-chat-post'
+import { POST } from './api.chat'
 
 test('POST without x-byok-openrouter returns 401 byok_missing', async (t) => {
   const previousKey = process.env.OPENROUTER_API_KEY
@@ -13,8 +13,8 @@ test('POST without x-byok-openrouter returns 401 byok_missing', async (t) => {
   })
   delete process.env.OPENROUTER_API_KEY
 
-  const response = await handleChatPost(
-    new Request('http://localhost/api/chat', {
+  const response = await POST({
+    request: new Request('http://localhost/api/chat', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
@@ -25,7 +25,7 @@ test('POST without x-byok-openrouter returns 401 byok_missing', async (t) => {
         context: [],
       }),
     }),
-  )
+  })
 
   assert.equal(response.status, 401)
   const body: unknown = await response.json()
