@@ -1,13 +1,11 @@
 ---
 name: add-example-tutorial
-description: "Use when adding a public teaching example, a docs tutorial, or wiring an example onto tanstack.com (Examples tab or a live sandbox on a docs page). Don't use for an internal Nx playground under examples/<name>/ (that is new-react-playground), for a package API change with no walkthrough, or for a docs-only copy edit."
+description: "Use when adding a public teaching example, a docs tutorial, or wiring an example onto tanstack.com (Examples tab or a live sandbox on a docs page). Don't use for an internal Nx playground (that is new-react-playground), for a package API change with no walkthrough, or for a docs-only copy edit."
 ---
 
 # Add Example Tutorial
 
-Ship a public teaching example the way Basic Chat shipped: a slim Start app under `examples/react/<slug>/`, a Tutorial tab walkthrough, nav, tests, and a tanstack.com sibling PR only when the live sandbox or Examples tab needs a new allowlist row.
-
-Canonical reference: `examples/react/basic-chat` and `docs/tutorials/basic-chat.md`. Copy that end-state, not the Nx generator output.
+Start from the Nx React app generator. Land at `examples/react/<slug>/`. Then slim the generated lab to the one scenario this tutorial teaches. `examples/react/basic-chat` and `docs/tutorials/basic-chat.md` show a finished public example. Do not copy that app. Use the generator as the starting tree.
 
 Load `docs`, `simple-english`, and `i-have-adhd` before writing tutorial pages. Load `pr-description` before `gh pr create` and after an agent push on an open PR.
 
@@ -24,66 +22,46 @@ Load `docs`, `simple-english`, and `i-have-adhd` before writing tutorial pages. 
 
 ## 1. Shape the app
 
-1. Pick a kebab-case `slug` (example: `basic-chat`).
-2. From the repo root: `pnpm nx g @tanstack/workspace-plugin:react-app <slug>`.
-3. Move `examples/<slug>` to `examples/react/<slug>`. Delete the old folder.
-4. Slim. One adapter. Inline the model id in `createOpenRouterText('openai/gpt-5.5', apiKey)` (or the adapter this tutorial teaches). No `chat-model.ts`. No `handle-chat-post.ts`. The POST handler lives in `src/routes/api.chat.ts`.
-5. Keep `workspace:*` for `@tanstack/ai*` in the example `package.json`. Do not add `@tanstack/ai-client`. Framework packages re-export the client and `/byok`.
-6. Port `3100`. Ignore route tests: `tanstackStart({ router: { routeFileIgnorePattern: '\\.test\\.ts$' } })`.
+1. Pick a kebab-case `slug`.
+2. From the repo root: `pnpm nx g @tanstack/workspace-plugin:react-app <slug>`. The files land at `examples/react/<slug>/`.
+3. Slim the generated lab to this tutorial. One adapter. Keep `workspace:*` for `@tanstack/ai*` deps. Do not add `@tanstack/ai-client` (framework packages re-export the client and `/byok`).
+4. Inline the model id. Read the adapter's current chat model list and pass the latest flagship id as a string literal into the adapter factory. Do not add a model const, a `chat-model.ts`, a `handle-chat-post.ts`, or any other one-off helper for the model or the POST body. The route file owns `chat()`.
 
-Do not commit the Nx kitchen-sink (every adapter, PKCE, model picker, thinking UI).
+Do not commit the unused generator extras (every adapter, PKCE, model picker, thinking UI) unless this tutorial teaches them.
 
-## 2. File layout (client then server)
+## 2. File layout
 
-Match Basic Chat:
+Match Basic Chat only for the Start routes folder:
 
-| File                                                                    | Role                                                                                                                                                         |
-| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `src/lib/byok.ts`                                                       | `defineByok` + `memoryStorage()` + provider list                                                                                                             |
-| `src/components/open-router-key-form.tsx` (or a name for this tutorial) | Export the key form. Do not inline it in the route.                                                                                                          |
-| `src/routes/index.tsx`                                                  | Import the form. `useChat({ connection: fetchServerSentEvents('/api/chat'), byok })`. No `forwardedProps` unless this example truly needs extra body fields. |
-| `src/routes/api.chat.ts`                                                | Next to `index.tsx`. Start maps `api.chat.ts` to `/api/chat`.                                                                                                |
+- `src/routes/index.tsx` is the page.
+- `src/routes/api.chat.ts` is the server route (next to `index.tsx`). Start maps `api.chat.ts` to `/api/chat`.
 
-BYOK import:
-
-```ts
-import { defineByok, memoryStorage } from '@tanstack/ai-react/byok'
-```
-
-Same subpath on `@tanstack/ai-vue/byok`, `ai-solid`, `ai-svelte`, `ai-preact`, `ai-angular`, `ai-octane`, `ai-remix`.
-
-Server POST, in this order:
-
-1. `chatParamsFromRequest` + `getByokKey` + `byokMissing` if empty.
-2. `chat({ adapter: createOpenRouterText('openai/gpt-5.5', apiKey), messages, threadId, runId })` then `toServerSentEventsResponse`.
-
-Export `POST` from `api.chat.ts`. Test it with `node:test` in `src/routes/api.chat.test.ts`. Pin a missing-key `401` `{ error: { type: 'byok_missing' } }` with independent literals. Do not add vitest as a new dependency.
+Add other files only when this tutorial needs them (a key form, a tool, a store). Many examples will not use BYOK. Do not add BYOK files by default.
 
 ## 3. Tutorial page
 
-Load `docs`. Run its persona and tone gates unless this conversation already chose them. Default tone if the user said "match Basic Chat": more casual than Quick Start, second person, short numbered steps.
+Load `docs`. Run its persona and tone gates unless this conversation already chose them.
 
-Page order (do not invert):
+Open with the problem the reader has, why it matters, and how this tutorial solves it (one short block). Then walk through steps. Each step teaches one piece of that solution and says why that piece exists.
 
-1. Create a Start app: `npx @tanstack/cli@latest create`. Then install with package-manager tabs. React-only line, no `@tanstack/ai-client`:
+Typical shape (adapt to the scenario; do not force BYOK):
 
-   `react: @tanstack/ai @tanstack/ai-react @tanstack/ai-<adapter>`
+1. Create a Start app (`npx @tanstack/cli@latest create`) and install with package-manager tabs. React-only line, no `@tanstack/ai-client`: `react: @tanstack/ai @tanstack/ai-react @tanstack/ai-<adapter>`.
+2. Client vs server: what each side is for in this scenario.
+3. Client pieces, one step each, each with why.
+4. Server pieces, one step each, each with why. Put the route at `src/routes/api.chat.ts` and say that.
 
-2. Short **Client and server** split (browser holds the key and POSTs; the route reads the key and streams).
-3. BYOK store file, then key form **in its own file**, export, then say to import it on the index route.
-4. `useChat` on `src/routes/index.tsx` (import the form).
-5. Server route at `src/routes/api.chat.ts` next to `index.tsx`, two substeps: read the key, then `chat()` + SSE.
-6. Try it. Sandbox comment. GitHub link. Optional recipe link.
+Put the sandbox comment and the GitHub link on the page (see End state). Do not add a numbered "try it" step that only repeats those.
 
-Sandbox comment (generic; change `slug`):
+Sandbox comment:
 
 ```html
 <!-- ::client-example library=ai framework=react slug=<slug> -->
 ```
 
-Do not mention Nx, generators, PRs, or rejected file splits in the tutorial. Code on the page must match the example files.
+Do not mention Nx, generators, or PRs in the tutorial. Code on the page must match the example files.
 
-Install tabs: only the `<!-- ::start:tabs variant="package-manager" mode="install" -->` form. See the `docs` skill.
+Install tabs: `<!-- ::start:tabs variant="package-manager" mode="install" -->`. See the `docs` skill.
 
 ## 4. Nav and pointers
 
@@ -106,21 +84,17 @@ Already on the site (do not redo unless missing on `origin/main`):
 - `rewriteWorkspaceProtocolDependencies` for `@tanstack/ai*` `workspace:*` → `latest` inside `fetchClientExampleFiles`
 - `getExampleStartingPath(..., 'ai')` → `src/routes/index.tsx`
 
-Still one row per slug:
+Still one row per slug: copy the Basic Chat WebContainer row in `src/utils/client-example-config.ts` and change `slug`. Keep `libraryId: 'ai'`, `framework: 'react'`, `entry: '/src/routes/index.tsx'`, `compatibility: 'tanstack-start-async-context'`, `pnpm install` / `pnpm run dev`. A Vue or different-entry example needs a matching config row, not a new embed component.
 
-1. Copy the Basic Chat WebContainer row in `src/utils/client-example-config.ts`. Change `slug`. Keep `libraryId: 'ai'`, `framework: 'react'`, `entry: '/src/routes/index.tsx'`, `compatibility: 'tanstack-start-async-context'`, `pnpm install` / `pnpm run dev`.
-2. Tests: `tests/repository-example.test.ts` (latest config object; non-latest is `undefined`) and `tests/repo-path.test.ts` if the starting path changed.
-3. A Vue / different-entry example needs a matching config row, not a new embed component.
+Find the tanstack.com checkout as a sibling folder or worktree. If it is missing, stop and ask. Do not mix this work with unrelated dirty files. Branch from `origin/main`.
 
-Find the tanstack.com checkout as a sibling folder or worktree. If it is missing, stop and ask. Do not mix this work with unrelated dirty files on that checkout. Branch from `origin/main`.
+Two PRs. Merge the AI PR first so GitHub has `examples/react/<slug>`. Link each PR from the other.
 
-Two PRs. Push to `origin` on both. Merge the AI PR first so GitHub has `examples/react/<slug>`. Link each PR from the other.
+A tutorial with no live sandbox and no Examples tab item does not need a tanstack.com PR.
 
-A docs-only tutorial with no live sandbox and no Examples tab item does not need a tanstack.com PR.
+## PRs
 
-## 6. Quality and PRs
-
-- `pnpm --filter <package-name> test:types` and the missing-key test.
+- Do not add tests under the example app.
 - Do not commit `docs/superpowers/`, plans, screenshots, or `.agent/`.
 - Example-only / docs / site wiring: no changeset unless a published package changed.
 - Conventional commit. No `Co-authored-by`.
@@ -128,15 +102,12 @@ A docs-only tutorial with no live sandbox and no Examples tab item does not need
 
 ## Common mistakes
 
-| Mistake                                          | Fix                                                      |
-| ------------------------------------------------ | -------------------------------------------------------- |
-| Leave the app at `examples/<slug>`               | Move to `examples/react/<slug>`                          |
-| Ship the full Nx lab                             | Slim to one adapter and the files in section 2           |
-| Extra `handle-chat-post.ts` / `chat-model.ts`    | Inline in `api.chat.ts`                                  |
-| Install or import `@tanstack/ai-client`          | `@tanstack/ai-react/byok` and the framework package root |
-| Key form inside `index.tsx`                      | Own file, export, import                                 |
-| `forwardedProps` on a simple BYOK chat           | Omit                                                     |
-| Tutorial starts with the server route            | Client BYOK, then `useChat`, then server                 |
-| New slug only in the AI repo                     | Allowlist row + Examples tab + sandbox comment           |
-| Mix tanstack.com landing WIP into the sandbox PR | Fresh branch from `origin/main`                          |
-| Nx / "we split the files" in the tutorial        | Current design only                                      |
+| Mistake | Fix |
+|---|---|
+| Copy Basic Chat file-for-file | Generate, then slim to this scenario |
+| Generate under `examples/<slug>` | The generator writes `examples/react/<slug>/` |
+| Model const or extra handler file | Inline the latest model id in the route |
+| BYOK files on a tutorial that does not need keys | Skip them |
+| Tutorial is only commands and code | Problem, why, how, then each step as one piece |
+| New slug only in the AI repo | Allowlist row + Examples tab + sandbox comment |
+| Mix tanstack.com landing WIP into the sandbox PR | Fresh branch from `origin/main` |
