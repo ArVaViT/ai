@@ -16,6 +16,8 @@ keywords:
 
 TanStack AI is a lightweight, type-safe SDK for building production-ready AI experiences. Its framework-agnostic core provides type-safe tool/function calling, streaming responses, and first-class React and Solid integrations, with adapters for multiple LLM providers — enabling predictable, composable, and testable AI features across any stack.
 
+Build a streaming React chat in [Basic Chat](../tutorials/basic-chat). The key stays in the tab.
+
 ## Key Features
 
 - ✅ **Type-Safe** - Full TypeScript support with Zod schema inference

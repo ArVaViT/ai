@@ -6,6 +6,7 @@ This directory contains comprehensive examples demonstrating TanStack AI across 
 
 Choose an example based on your use case:
 
+- **Want the smallest React + Start chat?** → [Basic Chat](#basic-chat)
 - **Want a full-stack TypeScript app?** → [TanStack Chat (ts-react-chat)](#tanstack-chat-ts-react-chat)
 - **Need a live world stream?** → [World generation (ts-react-media)](#world-generation-ts-react-media)
 - **Need a vanilla JS frontend?** → [Vanilla Chat](#vanilla-chat)
@@ -13,6 +14,24 @@ Choose an example based on your use case:
 - **Polyglot AG-UI backends (Go/Rust/PHP/Zig/Bash/Python)?** → [AG-UI Polyglot Echo (ag-ui)](#ag-ui-polyglot-echo-ag-ui)
 
 ## TypeScript Examples
+
+### Basic Chat
+
+A slim TanStack Start chat. One provider (OpenRouter). You paste your own key.
+
+**Path:** `examples/react/basic-chat`
+
+**Getting Started:**
+
+```bash
+pnpm --filter basic-chat dev
+```
+
+Open http://localhost:3100. Paste an OpenRouter key. Send a message.
+
+📖 [Full Documentation](react/basic-chat/README.md)
+
+---
 
 ### TanStack Chat (ts-react-chat)
 
