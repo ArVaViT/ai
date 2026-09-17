@@ -34,10 +34,10 @@ import {
   upsertReviewComment,
 } from './comments.ts'
 import {
-  AI_REVIEW_TRIGGER_LABEL,
   isAiReviewLabelEvent,
   isPullRequestLabeledEvent,
   parseReviewEvent,
+  resolveReviewEvent,
 } from './event.ts'
 import { createReviewStreamLogger } from './log.ts'
 import {
@@ -46,10 +46,11 @@ import {
   headRemoteUrl,
   preparePullWorktree,
   pushHead,
+  readPullSnapshot,
 } from './git.ts'
 import type { GitRunner } from './git.ts'
 import { setReviewState } from './labels.ts'
-import { fetchPullRequest, formatPullRequestDiff } from './pr.ts'
+import { fetchPullRequest } from './pr.ts'
 import { approveWaitingWorkflows, setSecureLabel } from './secure.ts'
 import { auditPullSecurity, scanGeneratedDiff } from './security.ts'
 import { shouldSkip } from './skip.ts'
@@ -154,6 +155,23 @@ type ReviewOutput = ReturnType<typeof parseVerdict> & {
   generatedDiff?: string
 }
 
+function matchesPullIdentity(
+  pr: ReviewInput['pr'],
+  current: ReviewInput['pr'],
+  expectedSha: string,
+) {
+  return (
+    current.number === pr.number &&
+    current.state === 'open' &&
+    current.baseRepo === pr.baseRepo &&
+    current.baseSha === pr.baseSha &&
+    current.baseRef === pr.baseRef &&
+    current.headRepo === pr.headRepo &&
+    current.headRef === pr.headRef &&
+    current.headSha === expectedSha
+  )
+}
+
 /**
  * Production Grok review step for `runReviewJob`.
  *
@@ -180,6 +198,7 @@ export function createGrokReview() {
           serial(`test "$(git rev-parse HEAD)" = '${input.pr.headSha}'`)
           serial(GROK_CLI_INSTALL_COMMAND)
         },
+        // Grok CLI child commands can read this key. Network access can expose it.
         ...(xaiKey !== undefined && xaiKey.length > 0
           ? { secrets: createSecrets({ XAI_API_KEY: xaiKey }) }
           : {}),
@@ -261,6 +280,7 @@ export async function runReviewJob(opts: {
   eventName: string
   event: unknown
   worktreeRoot: string
+  repoRoot: string
   machineUserLogin: string
   gitRunner: GitRunner
   review: (input: ReviewInput) => Promise<ReviewOutput>
@@ -269,19 +289,24 @@ export async function runReviewJob(opts: {
     headSha: string
     worktreeRoot: string
   }) => Promise<void>
-  alreadyReviewedSha: string | null
-  headCommitAuthorLogin: string | null
+  alreadyReviewedSha?: string | null
+  headCommitAuthorLogin?: string | null
 }) {
-  const parsed = parseReviewEvent({
-    eventName: opts.eventName,
-    event: opts.event,
-  })
+  const intent =
+    opts.eventName === 'workflow_run'
+      ? null
+      : parseReviewEvent({ eventName: opts.eventName, event: opts.event })
+  if (
+    opts.eventName === 'pull_request_target' &&
+    !isAiReviewLabelEvent(opts.event)
+  )
+    return { skipped: true as const, reason: 'not-label' }
 
   if (opts.eventName === 'issue_comment') {
     if (firstToken(readIssueCommentBody(opts.event)) !== '/ai-review') {
       return { skipped: true as const, reason: 'not-command' }
     }
-    if (!isRosterMaintainer(parsed.commentAuthor, opts.config)) {
+    if (!isRosterMaintainer(intent?.commentAuthor ?? null, opts.config)) {
       return { skipped: true as const, reason: 'not-maintainer' }
     }
   }
@@ -296,34 +321,50 @@ export async function runReviewJob(opts: {
   }
 
   if (isAiReviewLabelEvent(opts.event)) {
-    if (!isRosterMaintainer(parsed.commentAuthor, opts.config)) {
+    if (!isRosterMaintainer(intent?.commentAuthor ?? null, opts.config)) {
       return { skipped: true as const, reason: 'not-maintainer' }
     }
   }
 
-  const pr = await fetchPullRequest(opts.client, opts.repo, parsed.prNumber)
-  // A workflow_run cannot say why the signal fired, so the ai-review label
-  // on the PR means manual: only maintainers can label, and it opts the PR
-  // into a review on every push until it is removed.
-  const mode =
-    opts.eventName === 'workflow_run' &&
-    pr.labels.includes(AI_REVIEW_TRIGGER_LABEL)
-      ? 'manual'
-      : parsed.mode
+  const { parsed, pr } = await resolveReviewEvent({
+    eventName: opts.eventName,
+    event: opts.event,
+    client: opts.client,
+    repo: opts.repo,
+  })
+  const alreadyReviewedSha =
+    opts.alreadyReviewedSha === undefined
+      ? await fetchAlreadyReviewedSha(
+          opts.client,
+          opts.repo,
+          pr.number,
+          opts.machineUserLogin,
+        )
+      : opts.alreadyReviewedSha
+  let headCommitAuthorLogin = opts.headCommitAuthorLogin
+  if (headCommitAuthorLogin === undefined) {
+    const commit = await opts.client.rest(
+      'GET',
+      `/repos/${opts.repo}/commits/${pr.headSha}`,
+    )
+    const author = isRecord(commit) ? commit.author : undefined
+    headCommitAuthorLogin =
+      isRecord(author) && typeof author.login === 'string' ? author.login : null
+  }
   const skip = shouldSkip({
-    mode,
+    mode: parsed.mode,
     isDraft: pr.isDraft,
     authorLogin: pr.authorLogin,
-    headCommitAuthorLogin: opts.headCommitAuthorLogin,
+    headCommitAuthorLogin,
     headSha: pr.headSha,
-    alreadyReviewedSha: opts.alreadyReviewedSha,
+    alreadyReviewedSha,
     machineUserLogin: opts.machineUserLogin,
     config: opts.config,
   })
   const alreadyReviewed =
     skip.skip &&
     !pr.isDraft &&
-    pr.headSha === opts.alreadyReviewedSha &&
+    pr.headSha === alreadyReviewedSha &&
     pr.baseRef === 'main'
   if (alreadyReviewed) {
     return { skipped: true as const, reason: skip.reason }
@@ -341,10 +382,27 @@ export async function runReviewJob(opts: {
       if (!missingLabel) throw error
     }
   }
-  if (pr.baseRef !== 'main') {
+  if (
+    pr.baseRef !== 'main' ||
+    pr.baseRepo !== opts.repo ||
+    pr.state !== 'open'
+  ) {
     return { skipped: true as const, reason: 'not-main' }
   }
-  const security = await auditPullSecurity(opts.client, opts.repo, pr)
+  let snapshot
+  try {
+    snapshot = await readPullSnapshot(opts.repoRoot, pr, opts.gitRunner)
+  } catch (error) {
+    return {
+      skipped: true as const,
+      reason: 'security-blocked',
+      security: {
+        ok: false,
+        reasons: [error instanceof Error ? error.message : String(error)],
+      },
+    }
+  }
+  const security = auditPullSecurity(snapshot)
   if (!security.ok) {
     return {
       skipped: true as const,
@@ -356,7 +414,7 @@ export async function runReviewJob(opts: {
     return { skipped: true as const, reason: skip.reason }
   }
 
-  const diff = formatPullRequestDiff(pr.files)
+  const diff = snapshot.diff
   const review = await opts.review({
     pr,
     diff,
@@ -391,6 +449,17 @@ export async function runReviewJob(opts: {
     pr.maintainerCanModify &&
     generatedDiff.length > 0
   if (canPushPolish) {
+    const beforePolish = await fetchPullRequest(
+      opts.client,
+      opts.repo,
+      pr.number,
+    )
+    if (
+      !matchesPullIdentity(pr, beforePolish, pr.headSha) ||
+      !beforePolish.maintainerCanModify
+    ) {
+      return { skipped: true as const, reason: 'head-changed' }
+    }
     await opts.prepareWorktree({
       number: pr.number,
       headSha: pr.headSha,
@@ -415,6 +484,17 @@ export async function runReviewJob(opts: {
       if (head.code !== 0 || !/^[0-9a-f]{40}$/i.test(reviewedSha)) {
         throw new Error('could not read the polish commit SHA')
       }
+      const beforePush = await fetchPullRequest(
+        opts.client,
+        opts.repo,
+        pr.number,
+      )
+      if (
+        !matchesPullIdentity(pr, beforePush, pr.headSha) ||
+        !beforePush.maintainerCanModify
+      ) {
+        return { skipped: true as const, reason: 'head-changed' }
+      }
       await pushHead(opts.worktreeRoot, opts.gitRunner, {
         remoteUrl: headRemoteUrl({
           isFork: pr.headRepo !== opts.repo,
@@ -430,7 +510,7 @@ export async function runReviewJob(opts: {
   }
 
   const currentPr = await fetchPullRequest(opts.client, opts.repo, pr.number)
-  if (currentPr.headSha !== reviewedSha || currentPr.baseRef !== 'main') {
+  if (!matchesPullIdentity(pr, currentPr, reviewedSha)) {
     return { skipped: true as const, reason: 'head-changed' }
   }
   const label = reviewLabelFor(verdict.verdict, pushLanded)
@@ -512,16 +592,33 @@ function createProcessGitRunner(): GitRunner {
       const child = spawn('git', args, { cwd, env })
       let stdout = ''
       let stderr = ''
-      child.stdout.on('data', (chunk: Buffer | string) => {
-        stdout += String(chunk)
+      let bytes = 0
+      let overflow = false
+      child.stdout.setEncoding('utf8')
+      child.stderr.setEncoding('utf8')
+      function withinLimit(chunk: string) {
+        bytes += Buffer.byteLength(chunk, 'utf8')
+        if (bytes > 10_000_000) {
+          overflow = true
+          child.kill()
+          return false
+        }
+        return true
+      }
+      child.stdout.on('data', (chunk: string) => {
+        if (withinLimit(chunk)) stdout += chunk
       })
-      child.stderr.on('data', (chunk: Buffer | string) => {
-        stderr += String(chunk)
+      child.stderr.on('data', (chunk: string) => {
+        if (withinLimit(chunk)) stderr += chunk
       })
       child.on('error', reject)
       child.stdin.end(input)
       child.on('close', (code) => {
-        resolveResult({ stdout, stderr, code: code ?? 1 })
+        resolveResult({
+          stdout,
+          stderr: overflow ? 'Git output exceeds 10 MB' : stderr,
+          code: overflow ? 1 : (code ?? 1),
+        })
       })
     })
 }
@@ -583,15 +680,7 @@ export async function main() {
   const repoRoot = process.env.GITHUB_WORKSPACE ?? process.cwd()
   const machineUserLogin =
     process.env.AI_REVIEW_MACHINE_USER ?? 'tanstack-ai-bot'
-  const headCommitAuthor = process.env.AI_REVIEW_HEAD_COMMIT_AUTHOR
   const client = createGitHubClient({ token })
-  const parsed = parseReviewEvent({ eventName, event })
-  const alreadyReviewedSha = await fetchAlreadyReviewedSha(
-    client,
-    repo,
-    parsed.prNumber,
-    machineUserLogin,
-  )
   const result = await runReviewJob({
     client,
     repo,
@@ -600,6 +689,7 @@ export async function main() {
     eventName,
     event,
     worktreeRoot,
+    repoRoot,
     machineUserLogin,
     gitRunner: createProcessGitRunner(),
     review: createGrokReview(),
@@ -611,11 +701,6 @@ export async function main() {
         headSha,
         createProcessGitRunner(),
       ),
-    alreadyReviewedSha,
-    headCommitAuthorLogin:
-      headCommitAuthor === undefined || headCommitAuthor.length === 0
-        ? null
-        : headCommitAuthor,
   })
   if (result.skipped) {
     console.log(`ai-review skipped: ${result.reason}`)

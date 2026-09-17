@@ -1,6 +1,5 @@
 import { spawnSync } from 'node:child_process'
 import { describe, expect, it } from 'vitest'
-import type { GitHubClient } from '../../scripts/maintainer/github.ts'
 import {
   auditPullSecurity,
   findNewDependencies,
@@ -8,27 +7,19 @@ import {
   scanPullSecurity,
 } from './security.ts'
 
-function packageClient(before: string, after: string): GitHubClient {
+function snapshotFile(
+  overrides: Partial<
+    Parameters<typeof auditPullSecurity>[0]['files'][number]
+  > = {},
+) {
   return {
-    graphql() {
-      throw new Error('not used')
-    },
-    async rest(method, path) {
-      if (method !== 'GET') throw new Error(`unexpected ${method} ${path}`)
-      if (path.includes('ref=base-sha')) {
-        return {
-          encoding: 'base64',
-          content: Buffer.from(before).toString('base64'),
-        }
-      }
-      if (path.includes('ref=head-sha')) {
-        return {
-          encoding: 'base64',
-          content: Buffer.from(after).toString('base64'),
-        }
-      }
-      throw new Error(`unexpected ${method} ${path}`)
-    },
+    path: 'package.json',
+    patch: '@@ -1 +1 @@\n-old\n+new',
+    baseMode: '100644',
+    headMode: '100644',
+    before: '{}',
+    after: '{}',
+    ...overrides,
   }
 }
 
@@ -105,116 +96,45 @@ describe('scanPullSecurity', () => {
     ).toEqual([])
   })
 
-  it('fails the audit when package.json adds a dependency', async () => {
-    const result = await auditPullSecurity(
-      packageClient(
-        '{"dependencies":{"react":"19.0.0"}}',
-        '{"dependencies":{"react":"19.0.0","left-pad":"1.3.0"}}',
-      ),
-      'TanStack/ai',
-      {
-        baseSha: 'base-sha',
-        headSha: 'head-sha',
-        headRepo: 'alice/ai',
-        files: [{ path: 'package.json', patch: '@@ -1 +1 @@\n-old\n+new' }],
-      },
-    )
-
-    expect(result).toEqual({
+  it('compares the fixed manifest blobs', () => {
+    expect(
+      auditPullSecurity({
+        mergeBase: 'base',
+        diff: '',
+        files: [
+          snapshotFile({ after: '{"dependencies":{"left-pad":"1.3.0"}}' }),
+        ],
+      }),
+    ).toEqual({
       ok: false,
       reasons: ['package.json: adds dependencies: left-pad'],
     })
   })
 
-  it('blocks every lockfile change', async () => {
-    const result = await auditPullSecurity(
-      packageClient(
-        '{"dependencies":{"react":"19.0.0"}}',
-        '{"dependencies":{"react":"19.1.0"}}',
-      ),
-      'TanStack/ai',
-      {
-        baseSha: 'base-sha',
-        headSha: 'head-sha',
-        headRepo: 'alice/ai',
-        files: [
-          { path: 'package.json', patch: '@@ -1 +1 @@\n-old\n+new' },
-          {
-            path: 'pnpm-lock.yaml',
-            patch: '@@ -1 +1 @@\n-old\n+new',
-          },
-        ],
-      },
-    )
-
-    expect(result).toEqual({
-      ok: false,
-      reasons: ['pnpm-lock.yaml: lockfile changes require manual review'],
-    })
-  })
-
-  it('blocks a lockfile renamed to a non-lockfile path', async () => {
-    const result = await auditPullSecurity(
-      packageClient('{}', '{}'),
-      'TanStack/ai',
-      {
-        baseSha: 'base-sha',
-        headSha: 'head-sha',
-        headRepo: 'alice/ai',
-        files: [
-          {
-            path: 'old-lockfile.yaml',
-            previousPath: 'pnpm-lock.yaml',
-            patch: '@@ -1 +1 @@\n-old\n+new',
-          },
-        ],
-      },
-    )
-
-    expect(result).toEqual({
-      ok: false,
-      reasons: ['pnpm-lock.yaml: lockfile changes require manual review'],
-    })
-  })
-
-  it('blocks a symlink reported by the Git tree', async () => {
-    const client: GitHubClient = {
-      graphql() {
-        throw new Error('not used')
-      },
-      async rest(method, path) {
-        if (method !== 'GET') throw new Error(`unexpected ${method} ${path}`)
-        if (path.includes('/git/trees/base-sha')) {
-          return { truncated: false, tree: [] }
-        }
-        if (path.includes('/git/trees/head-sha')) {
-          return {
-            truncated: false,
-            tree: [{ path: 'link', mode: '120000', type: 'blob' }],
-          }
-        }
-        throw new Error(`unexpected ${method} ${path}`)
-      },
-    }
-
+  it('blocks a deleted lockfile when Git represents a rename as delete and add', () => {
     expect(
-      await auditPullSecurity(client, 'TanStack/ai', {
-        baseSha: 'base-sha',
-        headSha: 'head-sha',
-        headRepo: 'alice/ai',
+      auditPullSecurity({
+        mergeBase: 'base',
+        diff: '',
         files: [
-          {
-            path: 'link',
-            status: 'added',
-            previousPath: null,
-            patch: '@@ -0,0 +1 @@\n+/proc/self/environ',
-          },
+          snapshotFile({ path: 'pnpm-lock.yaml', headMode: '000000' }),
+          snapshotFile({ path: 'old-lockfile.yaml', baseMode: '000000' }),
         ],
       }),
     ).toEqual({
       ok: false,
-      reasons: ['link: unsafe Git mode 120000'],
+      reasons: ['pnpm-lock.yaml: lockfile changes require manual review'],
     })
+  })
+
+  it.each(['120000', '160000'])('blocks unsafe Git mode %s', (headMode) => {
+    expect(
+      auditPullSecurity({
+        mergeBase: 'base',
+        diff: '',
+        files: [snapshotFile({ path: 'link', baseMode: '000000', headMode })],
+      }),
+    ).toEqual({ ok: false, reasons: [`link: unsafe Git mode ${headMode}`] })
   })
 
   it('alerts on pull_request_target in a workflow', () => {

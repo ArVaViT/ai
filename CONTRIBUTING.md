@@ -92,6 +92,18 @@ All commands are run from the repo root. Nx handles affected detection and cachi
 
 Working on a single package? `cd packages/<pkg>` and use its scripts directly (`pnpm test:lib`, `pnpm test:types`, etc.).
 
+## Generate a React playground
+
+You need a TanStack Start chat app to try a feature. Do not copy `examples/ts-react-chat`. Run the generator.
+
+1. From the repo root, run `pnpm nx g @tanstack/workspace-plugin:react-app <name>`.
+2. Run `pnpm install`.
+3. Copy `examples/<name>/.env.example` to `examples/<name>/.env.local` and add a key.
+4. Run `pnpm --filter <name> dev` (port 3100).
+5. Change the index route for the feature. If the server must change, change `/api/chat`.
+
+Do not commit the new example unless you mean to keep it as a lasting example.
+
 ## TypeScript configuration
 
 There is a single `tsconfig.base.json` at the repo root with the shared `compilerOptions`. Every package extends it and overrides only what's unique to that package (e.g. `outDir`, JSX runtime, framework lib).
@@ -192,7 +204,7 @@ The bot sets exactly one of these labels:
 
 The bot never GitHub-approves and never merges. The `ready-to-merge` label still means a human approval plus green CI.
 
-If the bot pushes, it only commits bugs and suggestions the review listed. Maintainers can also start a run by adding the `ai-review` label, with a `/ai-review` comment, or from Actions (`workflow_dispatch`). A first-time fork PR needs one workflow approval first.
+If the bot pushes, it only commits bugs and suggestions the review listed. Roster maintainers can request one run by adding `ai-review` or writing `/ai-review`. A user with workflow access can use Actions (`workflow_dispatch`) on `main`. A retained label does not rerun each push. Remove and add it again for another request. A first-time fork PR needs one workflow approval first.
 
 The bot checks the PR before Grok starts. It blocks sensitive automation, agent instructions, symlinks, new executable files, new dependencies, and incomplete patches. Grok runs in a disposable Docker container without the bot's GitHub token. The host validates Grok's patch before it applies or pushes any edit.
 
