@@ -61,7 +61,7 @@ export const byok = defineByok({
 })
 ```
 
-Add a paste field. `byok.update` saves the key. `useByok` reads the status.
+Create `src/components/open-router-key-form.tsx`. Export `OpenRouterKeyForm` from that file. `byok.update` saves the key. `useByok` reads the status.
 
 ```tsx
 import { useState } from 'react'
@@ -69,7 +69,7 @@ import { openrouterByok } from '@tanstack/ai-openrouter/byok'
 import { useByok } from '@tanstack/ai-react'
 import { byok } from '@/lib/byok'
 
-function OpenRouterKeyForm() {
+export function OpenRouterKeyForm() {
   const snapshot = useByok(byok)
   const [draft, setDraft] = useState('')
   const [error, setError] = useState('')
@@ -117,7 +117,7 @@ If you want passkeys, open [Bring Your Own Key](../advanced/byok).
 
 ## 3. Hook up `useChat`
 
-Put this in `src/routes/index.tsx`. Pass `byok` and `forwardedProps` on the hook. `useChat` sends the key in an `x-byok-*` header.
+Open `src/routes/index.tsx`. Import `OpenRouterKeyForm` from `@/components/open-router-key-form`. Pass `byok` to `useChat`. The hook sends the key in an `x-byok-*` header.
 
 ```tsx
 import { useState } from 'react'
@@ -126,6 +126,7 @@ import {
   fetchServerSentEvents,
   useChat,
 } from '@tanstack/ai-react'
+import { OpenRouterKeyForm } from '@/components/open-router-key-form'
 import { byok } from '@/lib/byok'
 
 function ChatPage() {
@@ -133,10 +134,6 @@ function ChatPage() {
   const { messages, sendMessage, isLoading, error, stop } = useChat({
     connection: fetchServerSentEvents('/api/chat'),
     byok,
-    forwardedProps: {
-      provider: 'openrouter',
-      model: 'openai/gpt-5.5',
-    },
   })
 
   const handleSendMessage = () => {
@@ -188,7 +185,7 @@ A send with no key does not POST. The form shows "Paste an OpenRouter key, then 
 
 ## 4. Add the server route
 
-Create `src/routes/api.chat.ts`. Do this in two steps.
+Create `src/routes/api.chat.ts` in the `src/routes` folder, next to `index.tsx`. Start maps that file name to the `/api/chat` path. Do this in two steps.
 
 ### Read the key
 
