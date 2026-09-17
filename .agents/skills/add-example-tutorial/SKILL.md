@@ -102,12 +102,12 @@ A tutorial with no live sandbox and no Examples tab item does not need a tanstac
 
 ## Common mistakes
 
-| Mistake | Fix |
-|---|---|
-| Copy Basic Chat file-for-file | Generate, then slim to this scenario |
-| Generate under `examples/<slug>` | The generator writes `examples/react/<slug>/` |
-| Model const or extra handler file | Inline the latest model id in the route |
-| BYOK files on a tutorial that does not need keys | Skip them |
-| Tutorial is only commands and code | Problem, why, how, then each step as one piece |
-| New slug only in the AI repo | Allowlist row + Examples tab + sandbox comment |
-| Mix tanstack.com landing WIP into the sandbox PR | Fresh branch from `origin/main` |
+| Mistake                                          | Fix                                            |
+| ------------------------------------------------ | ---------------------------------------------- |
+| Copy Basic Chat file-for-file                    | Generate, then slim to this scenario           |
+| Generate under `examples/<slug>`                 | The generator writes `examples/react/<slug>/`  |
+| Model const or extra handler file                | Inline the latest model id in the route        |
+| BYOK files on a tutorial that does not need keys | Skip them                                      |
+| Tutorial is only commands and code               | Problem, why, how, then each step as one piece |
+| New slug only in the AI repo                     | Allowlist row + Examples tab + sandbox comment |
+| Mix tanstack.com landing WIP into the sandbox PR | Fresh branch from `origin/main`                |
