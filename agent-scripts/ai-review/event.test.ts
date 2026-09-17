@@ -46,7 +46,9 @@ function workflowFixture(
           event: 'pull_request',
           status: 'completed',
           conclusion: 'success',
-          repository: { full_name: options.wrongRepo ? 'other/ai' : 'TanStack/ai' },
+          repository: {
+            full_name: options.wrongRepo ? 'other/ai' : 'TanStack/ai',
+          },
           head_repository: { full_name: 'alice/ai' },
           head_branch: options.wrongBranch ? 'other-branch' : 'feature',
           head_sha: sha,
@@ -93,20 +95,24 @@ describe('resolveReviewEvent', () => {
     expect(pages).toHaveLength(2)
   })
 
-  it.each([{ duplicate: true }, { stale: true }, { wrongWorkflow: true }, { noCandidate: true }, { wrongRepo: true }, { wrongBranch: true }])(
-    'rejects ambiguous, stale, or unrelated runs',
-    async (options) => {
-      const { client } = workflowFixture(options)
-      await expect(
-        resolveReviewEvent({
-          client,
-          repo: 'TanStack/ai',
-          eventName: 'workflow_run',
-          event: { workflow_run: { id: 123, pull_requests: [{ number: 99 }] } },
-        }),
-      ).rejects.toThrow(/workflow_run/)
-    },
-  )
+  it.each([
+    { duplicate: true },
+    { stale: true },
+    { wrongWorkflow: true },
+    { noCandidate: true },
+    { wrongRepo: true },
+    { wrongBranch: true },
+  ])('rejects ambiguous, stale, or unrelated runs', async (options) => {
+    const { client } = workflowFixture(options)
+    await expect(
+      resolveReviewEvent({
+        client,
+        repo: 'TanStack/ai',
+        eventName: 'workflow_run',
+        event: { workflow_run: { id: 123, pull_requests: [{ number: 99 }] } },
+      }),
+    ).rejects.toThrow(/workflow_run/)
+  })
 
   it('keeps status labels out of the signal and concurrency behind the review guard', async () => {
     const signal = await readFile(
