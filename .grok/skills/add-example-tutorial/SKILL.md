@@ -98,12 +98,12 @@ A Vue example, a non-kebab slug, or a different entry file still needs a site co
 
 ## Common mistakes
 
-| Mistake | Fix |
-|---|---|
-| Copy Basic Chat file-for-file | Generate, then slim to this scenario |
-| Generate under `examples/<slug>` | The generator writes `examples/react/<slug>/` |
-| Model const or extra handler file | Inline the latest model id in the route |
-| BYOK files on a tutorial that does not need keys | Skip them |
-| Tutorial is only commands and code | Problem, why, how, then each step as one piece |
-| New slug only in the AI repo | Examples tab + sandbox comment in the AI repo |
-| Open a tanstack.com PR for a new React slug | Skip it. The site fallback covers `examples/react/<slug>` |
+| Mistake                                          | Fix                                                       |
+| ------------------------------------------------ | --------------------------------------------------------- |
+| Copy Basic Chat file-for-file                    | Generate, then slim to this scenario                      |
+| Generate under `examples/<slug>`                 | The generator writes `examples/react/<slug>/`             |
+| Model const or extra handler file                | Inline the latest model id in the route                   |
+| BYOK files on a tutorial that does not need keys | Skip them                                                 |
+| Tutorial is only commands and code               | Problem, why, how, then each step as one piece            |
+| New slug only in the AI repo                     | Examples tab + sandbox comment in the AI repo             |
+| Open a tanstack.com PR for a new React slug      | Skip it. The site fallback covers `examples/react/<slug>` |
