@@ -63,7 +63,7 @@ export const byok = defineByok({
 
 Create `src/components/open-router-key-form.tsx`. Export `OpenRouterKeyForm` from that file. `byok.update` saves the key. `useByok` reads the status.
 
-```tsx
+```tsx ignore
 import { useState } from 'react'
 import { openrouterByok } from '@tanstack/ai-openrouter/byok'
 import { useByok } from '@tanstack/ai-react'
@@ -119,7 +119,7 @@ If you want passkeys, open [Bring Your Own Key](../advanced/byok).
 
 Open `src/routes/index.tsx`. Import `OpenRouterKeyForm` from `@/components/open-router-key-form`. Pass `byok` to `useChat`. The hook sends the key in an `x-byok-*` header.
 
-```tsx
+```tsx ignore
 import { useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import {
@@ -191,7 +191,7 @@ Create `src/routes/api.chat.ts` in the `src/routes` folder, next to `index.tsx`.
 
 `getByokKey` reads the `x-byok-openrouter` header, then `OPENROUTER_API_KEY` in the environment. If both are empty, `byokMissing` returns HTTP 401.
 
-```typescript
+```typescript ignore
 import { createFileRoute } from '@tanstack/react-router'
 import { chatParamsFromRequest } from '@tanstack/ai'
 import { openrouterByok } from '@tanstack/ai-openrouter/byok'
@@ -222,7 +222,7 @@ Import `openrouterByok` from `@tanstack/ai-openrouter/byok`, not from the adapte
 
 Replace the `ok` response. Pass the key into `createOpenRouterText`. Wrap `chat()` with `toServerSentEventsResponse`.
 
-```typescript
+```typescript ignore
 import { createFileRoute } from '@tanstack/react-router'
 import {
   chat,
