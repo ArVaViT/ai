@@ -37,12 +37,12 @@ Do not commit the Nx kitchen-sink (every adapter, PKCE, model picker, thinking U
 
 Match Basic Chat:
 
-| File | Role |
-|---|---|
-| `src/lib/byok.ts` | `defineByok` + `memoryStorage()` + provider list |
-| `src/components/open-router-key-form.tsx` (or a name for this tutorial) | Export the key form. Do not inline it in the route. |
-| `src/routes/index.tsx` | Import the form. `useChat({ connection: fetchServerSentEvents('/api/chat'), byok })`. No `forwardedProps` unless this example truly needs extra body fields. |
-| `src/routes/api.chat.ts` | Next to `index.tsx`. Start maps `api.chat.ts` to `/api/chat`. |
+| File                                                                    | Role                                                                                                                                                         |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `src/lib/byok.ts`                                                       | `defineByok` + `memoryStorage()` + provider list                                                                                                             |
+| `src/components/open-router-key-form.tsx` (or a name for this tutorial) | Export the key form. Do not inline it in the route.                                                                                                          |
+| `src/routes/index.tsx`                                                  | Import the form. `useChat({ connection: fetchServerSentEvents('/api/chat'), byok })`. No `forwardedProps` unless this example truly needs extra body fields. |
+| `src/routes/api.chat.ts`                                                | Next to `index.tsx`. Start maps `api.chat.ts` to `/api/chat`.                                                                                                |
 
 BYOK import:
 
@@ -128,15 +128,15 @@ A docs-only tutorial with no live sandbox and no Examples tab item does not need
 
 ## Common mistakes
 
-| Mistake | Fix |
-|---|---|
-| Leave the app at `examples/<slug>` | Move to `examples/react/<slug>` |
-| Ship the full Nx lab | Slim to one adapter and the files in section 2 |
-| Extra `handle-chat-post.ts` / `chat-model.ts` | Inline in `api.chat.ts` |
-| Install or import `@tanstack/ai-client` | `@tanstack/ai-react/byok` and the framework package root |
-| Key form inside `index.tsx` | Own file, export, import |
-| `forwardedProps` on a simple BYOK chat | Omit |
-| Tutorial starts with the server route | Client BYOK, then `useChat`, then server |
-| New slug only in the AI repo | Allowlist row + Examples tab + sandbox comment |
-| Mix tanstack.com landing WIP into the sandbox PR | Fresh branch from `origin/main` |
-| Nx / "we split the files" in the tutorial | Current design only |
+| Mistake                                          | Fix                                                      |
+| ------------------------------------------------ | -------------------------------------------------------- |
+| Leave the app at `examples/<slug>`               | Move to `examples/react/<slug>`                          |
+| Ship the full Nx lab                             | Slim to one adapter and the files in section 2           |
+| Extra `handle-chat-post.ts` / `chat-model.ts`    | Inline in `api.chat.ts`                                  |
+| Install or import `@tanstack/ai-client`          | `@tanstack/ai-react/byok` and the framework package root |
+| Key form inside `index.tsx`                      | Own file, export, import                                 |
+| `forwardedProps` on a simple BYOK chat           | Omit                                                     |
+| Tutorial starts with the server route            | Client BYOK, then `useChat`, then server                 |
+| New slug only in the AI repo                     | Allowlist row + Examples tab + sandbox comment           |
+| Mix tanstack.com landing WIP into the sandbox PR | Fresh branch from `origin/main`                          |
+| Nx / "we split the files" in the tutorial        | Current design only                                      |
