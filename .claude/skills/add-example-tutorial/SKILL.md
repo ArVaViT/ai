@@ -84,11 +84,11 @@ Point Overview and Quick Start at the tutorial. Cross-link any recipe that cover
 
 ## Common mistakes
 
-| Mistake | Fix |
-|---|---|
-| Copy Basic Chat file-for-file | Generate, then slim to this scenario |
-| Generate under `examples/<slug>` | The generator writes `examples/react/<slug>/` |
-| Model const or extra handler file | Inline the latest model id in the route |
-| BYOK files on a tutorial that does not need keys | Skip them |
-| Tutorial is only commands and code | Problem, why, how, then each step as one piece |
-| Skip nav or the sandbox comment | Add the Examples tab child and the `::client-example` comment |
+| Mistake                                          | Fix                                                           |
+| ------------------------------------------------ | ------------------------------------------------------------- |
+| Copy Basic Chat file-for-file                    | Generate, then slim to this scenario                          |
+| Generate under `examples/<slug>`                 | The generator writes `examples/react/<slug>/`                 |
+| Model const or extra handler file                | Inline the latest model id in the route                       |
+| BYOK files on a tutorial that does not need keys | Skip them                                                     |
+| Tutorial is only commands and code               | Problem, why, how, then each step as one piece                |
+| Skip nav or the sandbox comment                  | Add the Examples tab child and the `::client-example` comment |
