@@ -266,4 +266,6 @@ The same app is on the Examples tab at `/ai/latest/docs/framework/react/examples
 
 You have a streaming chat. The OpenRouter key never sits in a server env file.
 
+The full example is on GitHub: [TanStack/ai `examples/react/basic-chat`](https://github.com/TanStack/ai/tree/main/examples/react/basic-chat).
+
 For a headless chat UI, open [A chat box with no tools](../ui/recipes/basic-chat).
