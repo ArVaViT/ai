@@ -34,12 +34,17 @@ function samplePull(
 ) {
   return {
     number: NUMBER,
+    state: 'open',
     title: 'Fix chat crash',
     body: 'Handle empty messages.',
     html_url: 'https://github.com/TanStack/ai/pull/42',
     draft: overrides.draft ?? false,
     user: { login: overrides.login ?? 'alice' },
-    base: { sha: BASE_SHA, ref: overrides.baseRef ?? 'main' },
+    base: {
+      sha: BASE_SHA,
+      ref: overrides.baseRef ?? 'main',
+      repo: { full_name: REPO },
+    },
     head: {
       sha: SHA,
       ref: HEAD_REF,
@@ -135,6 +140,29 @@ function createFakeGitHub(
     },
     async rest(method, path, body) {
       if (method === 'GET' && path === pullPath) return pull
+      if (method === 'GET' && path === `/repos/${REPO}/actions/runs/123`)
+        return {
+          id: 123,
+          workflow_id: 7,
+          event: 'pull_request',
+          status: 'completed',
+          conclusion: 'success',
+          repository: { full_name: REPO },
+          head_repository: { full_name: HEAD_REPO },
+          head_branch: HEAD_REF,
+          head_sha: SHA,
+        }
+      if (
+        method === 'GET' &&
+        path === `/repos/${REPO}/actions/workflows/ai-review-signal.yml`
+      )
+        return { id: 7, path: '.github/workflows/ai-review-signal.yml' }
+      if (
+        method === 'GET' &&
+        path.startsWith(`/repos/${REPO}/commits/${SHA}/pulls?`)
+      )
+        return [pull]
+
       if (method === 'GET' && path.startsWith(`/repos/${REPO}/actions/runs?`)) {
         const params = new URL(`https://api.github.com${path}`).searchParams
         const ids =
@@ -346,8 +374,31 @@ async function runJob(options: {
     eventName: options.eventName ?? 'pull_request',
     event: options.event ?? pullRequestEvent(),
     worktreeRoot: WORKTREE,
+    repoRoot: WORKTREE,
     machineUserLogin: MACHINE,
     gitRunner: async (args, cwd, input) => {
+      const files = options.files ?? sampleFiles()
+      if (args[0] === 'fetch') return { stdout: '', stderr: '', code: 0 }
+      if (args[0] === 'merge-base')
+        return { stdout: BASE_SHA, stderr: '', code: 0 }
+      if (args[0] === 'diff')
+        return {
+          stdout: args.includes('--raw')
+            ? files
+                .map(
+                  (file) =>
+                    `:100644 100644 ${BASE_SHA} ${SHA} M\0${file.filename}\0`,
+                )
+                .join('')
+            : files
+                .map(
+                  (file) =>
+                    `diff --git a/${file.filename} b/${file.filename}\n${file.patch}\n`,
+                )
+                .join(''),
+          stderr: '',
+          code: 0,
+        }
       const gitResult = await git.runner(args, cwd, input)
       if (args[0] === 'push' && gitResult.code === 0) pull.head.sha = POLISH_SHA
       return gitResult
@@ -367,6 +418,89 @@ async function runJob(options: {
 }
 
 describe('runReviewJob', () => {
+  it.each(['base', 'closed', 'edits'])(
+    'does not apply or push polish when %s changes during review',
+    async (field) => {
+      const pull = samplePull({ maintainer_can_modify: true })
+      const result = await runJob({
+        pull,
+        review: async () => {
+          if (field === 'base') pull.base.sha = 'd'.repeat(40)
+          if (field === 'closed') pull.state = 'closed'
+          if (field === 'edits') pull.maintainer_can_modify = false
+          return polishReview()
+        },
+      })
+      expect(result.result).toEqual({ skipped: true, reason: 'head-changed' })
+      expect(result.gitCalls).toEqual([])
+      expect(result.comments).toEqual([])
+    },
+  )
+  it('does not repeat a paid review for status labels or an automatic replay', async () => {
+    const pull = samplePull({ labels: ['ai-review'] })
+    let reviews = 0
+    const review = async () => {
+      reviews += 1
+      return readyReview()
+    }
+    const first = await runJob({
+      pull,
+      review,
+      eventName: 'pull_request_target',
+      event: {
+        action: 'labeled',
+        label: { name: 'ai-review' },
+        sender: { login: 'alem' },
+        pull_request: pull,
+      },
+    })
+    expect(first.result.skipped).toBe(false)
+    for (const label of ['ai-ready', 'secure', 'ai-needs-work']) {
+      const replay = await runJob({
+        pull,
+        review,
+        eventName: 'pull_request_target',
+        event: {
+          action: 'labeled',
+          label: { name: label },
+          sender: { login: MACHINE },
+          pull_request: pull,
+        },
+        initialIssueLabels: ['secure', 'ai-ready'],
+      })
+      expect(replay.result).toEqual({ skipped: true, reason: 'not-label' })
+      expect([...replay.issueLabels]).toEqual(['secure', 'ai-ready'])
+    }
+    const auto = await runJob({
+      pull,
+      review,
+      eventName: 'workflow_run',
+      event: { workflow_run: { id: 123, pull_requests: [] } },
+      alreadyReviewedSha: SHA,
+    })
+    expect(auto.result.skipped).toBe(true)
+    expect(reviews).toBe(1)
+  })
+
+  it.each(['base', 'headRepo', 'headRef'])(
+    'publishes nothing when %s identity changes during review',
+    async (field) => {
+      const pull = samplePull()
+      const result = await runJob({
+        pull,
+        review: async () => {
+          if (field === 'base') pull.base.sha = 'd'.repeat(40)
+          if (field === 'headRepo') pull.head.repo.full_name = 'other/ai'
+          if (field === 'headRef') pull.head.ref = 'other-branch'
+          return readyReview()
+        },
+      })
+      expect(result.result).toEqual({ skipped: true, reason: 'head-changed' })
+      expect(result.comments).toEqual([])
+      expect(result.approvedRuns).toEqual([])
+    },
+  )
+
   it.each(['input', 'generated', 'verdict'])(
     'removes stale security labels when the %s audit fails',
     async (stage) => {
@@ -483,7 +617,7 @@ describe('runReviewJob', () => {
         action: 'labeled',
         label: { name: 'ai-review' },
         sender: { login: 'alem' },
-        pull_request: { number: NUMBER },
+        pull_request: samplePull(),
       },
       review: readyReview,
     })
@@ -505,7 +639,7 @@ describe('runReviewJob', () => {
         action: 'labeled',
         label: { name: 'ai-review' },
         sender: { login: 'alem' },
-        pull_request: { number: NUMBER },
+        pull_request: samplePull(),
       },
       review: readyReview,
     })
@@ -523,6 +657,7 @@ describe('runReviewJob', () => {
     return {
       action: 'completed',
       workflow_run: {
+        id: 123,
         conclusion: 'success',
         pull_requests: [{ number: NUMBER }],
       },
@@ -545,21 +680,14 @@ describe('runReviewJob', () => {
     expect(comments).toHaveLength(1)
   })
 
-  it('runs a workflow_run as manual when the ai-review label is on the PR', async () => {
+  it('keeps workflow_run automatic when ai-review remains on the PR', async () => {
     const { result, comments } = await runJob({
       eventName: 'workflow_run',
       pull: samplePull({ login: 'alem', labels: ['ai-review'] }),
       event: workflowRunEvent(),
-      review: readyReview,
     })
-
-    expect(result).toEqual({
-      skipped: false,
-      verdict: { verdict: 'ready', issues: [] },
-      label: 'ai-ready',
-      pushLanded: false,
-    })
-    expect(comments).toHaveLength(1)
+    expect(result).toEqual({ skipped: true, reason: 'maintainer-author' })
+    expect(comments).toEqual([])
   })
 
   it('skips a workflow_run for a maintainer PR without the ai-review label', async () => {
@@ -579,7 +707,7 @@ describe('runReviewJob', () => {
       event: {
         action: 'labeled',
         label: { name: 'bug' },
-        pull_request: { number: NUMBER },
+        pull_request: samplePull(),
       },
     })
 
@@ -594,6 +722,7 @@ describe('runReviewJob', () => {
       event: {
         issue: {
           number: NUMBER,
+          state: 'open',
           pull_request: {
             url: 'https://api.github.com/repos/TanStack/ai/pulls/42',
           },
@@ -616,6 +745,7 @@ describe('runReviewJob', () => {
       event: {
         issue: {
           number: NUMBER,
+          state: 'open',
           pull_request: {
             url: 'https://api.github.com/repos/TanStack/ai/pulls/42',
           },
@@ -643,6 +773,7 @@ describe('runReviewJob', () => {
       event: {
         issue: {
           number: NUMBER,
+          state: 'open',
           pull_request: {
             url: 'https://api.github.com/repos/TanStack/ai/pulls/42',
           },
@@ -858,7 +989,7 @@ describe('runReviewJob', () => {
         action: 'labeled',
         label: { name: 'ai-review' },
         sender: { login: 'stranger' },
-        pull_request: { number: NUMBER },
+        pull_request: samplePull(),
       },
       waitingRunIds: [101],
     })

@@ -9,7 +9,7 @@ name: AI review signal
 on:
   pull_request:
     branches: [main]
-    types: [opened, synchronize, ready_for_review, labeled]
+    types: [opened, synchronize, ready_for_review]
 
 concurrency:
   group: ai-review-signal-${{ github.event.pull_request.number }}

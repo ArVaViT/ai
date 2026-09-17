@@ -16,11 +16,11 @@ Until both secrets exist, the job skips green. It does not comment as `github-ac
 
 ## How a run starts
 
-Two workflows split the job. `ai-review-signal` runs on every PR event with no secrets and only signals. Its completion starts `ai-review` on the base branch with secrets. No `pull_request_target` anywhere.
+Two workflows split the job. `ai-review-signal` runs without secrets or a checkout. Its completion starts the trusted reviewer on `main`. The reviewer resolves the PR through authenticated run and commit metadata, including fork runs with no PR list. It rejects stale, mismatched, or ambiguous results.
 
-Auto: the signal fires on opened, synchronize, ready_for_review, and labeled for PRs that target `main`. Auto skips drafts, bot PRs, roster-maintainer PRs, the machine user's own head commit, and a head SHA this bot already reviewed. The bot never executes PR code.
+Auto: the signal fires on opened, synchronize, and ready_for_review for PRs that target `main`. Auto skips drafts, bot PRs, roster-maintainer PRs, the machine user's own head commit, and a head SHA this bot already reviewed. The host never executes PR code. Grok can execute it inside the container.
 
-Manual: a run with the `ai-review` label on the PR, a `/ai-review` comment, or Actions `workflow_dispatch` bypasses the auto-only draft, author, and reviewed-SHA skips. Keep the label on the PR to re-review every push. Remove it to stop.
+Manual: a roster maintainer adds `ai-review` or writes `/ai-review`. A user with GitHub workflow access can also use Actions `workflow_dispatch` on `main`. These requests bypass automatic draft, author, and reviewed-SHA skips. The label addition uses `pull_request_target` with trusted `main` code only. A retained label does not change later automatic runs. Remove and add it again for another manual request. Bot status labels do not trigger a review.
 
 A first-time fork PR needs one workflow approval. After any merged commit or PR, later runs are automatic.
 
@@ -28,24 +28,24 @@ After a clean `ai-ready` scan, the bot approves the waiting Test checks.
 
 ## Security boundary
 
-Before a new audit, the host removes stale `secure` and `ai-ready` labels. An automatic run for a draft also removes these labels, even when its SHA is unchanged. It checks the PR before it starts Grok. The check fails closed when it finds:
+Before a new audit, the host removes stale `secure` and `ai-ready` labels. An automatic run for a draft also removes these labels, even when its SHA is unchanged. It fetches fixed base and head commits without a checkout. It reads the complete diff from their merge base. The security check and Grok receive the same snapshot. Renames appear as deletions and additions, so both paths are checked. It checks the PR before it starts Grok. The check fails closed when it finds:
 
-- A missing GitHub patch
+- An incomplete Git snapshot or Git output above 10 MB
 - A symlink, submodule, or new executable file
 - A changed workflow, agent instruction, hook, action, or release script
 - A new dependency in a `package.json` file
 - A lockfile change
 - A shell download, encoded PowerShell command, or reverse shell
 
-Grok clones the exact PR commit into a disposable Docker container. The container does not receive `AI_REVIEW_TOKEN`, mount host files, or get a `host.docker.internal` alias. It receives `XAI_API_KEY` and has network access because Grok needs the xAI API. The Docker provider cannot restrict network destinations. Docker protects the host token and files, but it does not protect the xAI key from code inside the container.
+Grok clones the exact PR commit into a disposable Docker container. The container does not receive `AI_REVIEW_TOKEN`, mount host files, or get a `host.docker.internal` alias. It receives `XAI_API_KEY` and has network access because Grok needs the xAI API. The Docker provider cannot restrict network destinations. Grok CLI child commands can read `XAI_API_KEY`. PR code or model commands can expose it through network access. Docker, prompt rules, the host scanner, and `hostGateway: false` do not protect this key. The GitHub token stays outside the container. This xAI key risk remains in this design.
 
 Grok edits only its container clone. The host receives a unified diff after the review. Before the host applies that diff, it rejects large or malformed patches, sensitive files, package files, lockfiles, symlinks, binaries, path traversal, and the exact sandbox secret. Each file needs its own matching headers and complete hunks. The host then runs `git apply --check` before it applies, commits, or pushes the patch.
 
-Before it publishes a verdict, the host checks that the PR still targets `main` and has the expected head SHA. After a polish push, the expected SHA is the new commit. A changed head receives no verdict from the old review.
+Before it publishes a verdict, the host checks the PR number, open state, base SHA and repository, and head SHA, repository, and branch. The base must still be `main`. After a polish push, the expected SHA is the new commit. A changed head receives no verdict from the old review.
 
 ## Labels
 
-The `ai-review` label opts a PR into a manual review on every push. The bot does not remove that label. The bot does not auto-approve workflows when the PR changes a workflow file.
+Adding `ai-review` requests one manual review. The bot does not remove that label. The bot does not auto-approve workflows when the PR changes a workflow file.
 
 The bot sets exactly one of these verdict labels. It removes the other two. It never touches `ready-to-merge`.
 

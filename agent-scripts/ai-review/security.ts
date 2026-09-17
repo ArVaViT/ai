@@ -3,7 +3,7 @@
  * A clean scan is required before the bot adds `secure` or approves workflows.
  */
 
-import type { GitHubClient } from '../../scripts/maintainer/github.ts'
+import type { readPullSnapshot } from './git.ts'
 
 export type PullFile = {
   path: string
@@ -289,133 +289,38 @@ export function scanGeneratedDiff(diff: string, secrets: Array<string> = []) {
   return { ok: reasons.length === 0, reasons }
 }
 
-function encodePath(path: string) {
-  return path.split('/').map(encodeURIComponent).join('/')
-}
-
-async function fetchFile(
-  client: GitHubClient,
-  repo: string,
-  path: string,
-  ref: string,
+/** Audit the same fixed Git snapshot used by the model. */
+export function auditPullSecurity(
+  snapshot: Awaited<ReturnType<typeof readPullSnapshot>>,
 ) {
-  const apiPath = `/repos/${repo}/contents/${encodePath(path)}?ref=${encodeURIComponent(ref)}`
-  try {
-    const raw = await client.rest('GET', apiPath)
+  const reasons = [...scanPullSecurity(snapshot.files).reasons]
+  for (const file of snapshot.files) {
+    if (LOCKFILE.test(file.path)) {
+      reasons.push(`${file.path}: lockfile changes require manual review`)
+    }
     if (
-      !isRecord(raw) ||
-      raw.encoding !== 'base64' ||
-      typeof raw.content !== 'string'
+      file.headMode !== '000000' &&
+      file.headMode !== '100644' &&
+      file.headMode !== '100755'
     ) {
-      throw new Error(`GitHub GET ${apiPath} returned no base64 content`)
+      reasons.push(`${file.path}: unsafe Git mode ${file.headMode}`)
     }
-    return Buffer.from(raw.content, 'base64').toString('utf8')
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('HTTP 404'))
-      return null
-    throw error
-  }
-}
-
-async function fetchTreeModes(client: GitHubClient, repo: string, sha: string) {
-  const apiPath = `/repos/${repo}/git/trees/${encodeURIComponent(sha)}?recursive=1`
-  const raw = await client.rest('GET', apiPath)
-  if (!isRecord(raw) || !Array.isArray(raw.tree) || raw.truncated === true) {
-    throw new Error(`GitHub GET ${apiPath} returned an incomplete tree`)
-  }
-  const modes = new Map<string, string>()
-  for (const item of raw.tree) {
     if (
-      isRecord(item) &&
-      typeof item.path === 'string' &&
-      typeof item.mode === 'string'
+      file.baseMode !== '000000' &&
+      file.baseMode !== '100644' &&
+      file.baseMode !== '100755'
     ) {
-      modes.set(item.path, item.mode)
+      reasons.push(`${file.path}: unsafe base Git mode ${file.baseMode}`)
     }
-  }
-  return modes
-}
-
-async function checkFileModes(
-  client: GitHubClient,
-  repo: string,
-  pull: {
-    baseSha: string
-    headSha: string
-    headRepo: string
-    files: Array<PullFile>
-  },
-) {
-  if (!pull.files.some((file) => file.status !== undefined)) return []
-  const [baseModes, headModes] = await Promise.all([
-    fetchTreeModes(client, repo, pull.baseSha),
-    fetchTreeModes(client, pull.headRepo, pull.headSha),
-  ])
-  const reasons = []
-  for (const file of pull.files) {
-    if (file.status === 'removed') continue
-    const headMode = headModes.get(file.path)
-    if (headMode === undefined) {
-      reasons.push(`${file.path}: missing from the head Git tree`)
-      continue
-    }
-    if (headMode !== '100644' && headMode !== '100755') {
-      reasons.push(`${file.path}: unsafe Git mode ${headMode}`)
-      continue
-    }
-    const basePath = file.previousPath ?? file.path
-    if (headMode === '100755' && baseModes.get(basePath) !== '100755') {
+    if (file.headMode === '100755' && file.baseMode !== '100755') {
       reasons.push(`${file.path}: becomes executable`)
     }
-  }
-  return reasons
-}
-
-/** Run the static scan and compare package manifests for new dependencies. */
-export async function auditPullSecurity(
-  client: GitHubClient,
-  repo: string,
-  pull: {
-    baseSha: string
-    headSha: string
-    headRepo: string
-    files: Array<PullFile>
-  },
-) {
-  const security = scanPullSecurity(pull.files)
-  const reasons = [...security.reasons]
-  try {
-    reasons.push(...(await checkFileModes(client, repo, pull)))
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    reasons.push(`could not verify Git file modes: ${message}`)
-  }
-  const packageFiles = pull.files.filter((file) =>
-    /(^|\/)package\.json$/.test(file.path),
-  )
-  for (const file of pull.files) {
-    const previousPath = file.previousPath
-    const lockfilePath =
-      previousPath !== undefined &&
-      previousPath !== null &&
-      LOCKFILE.test(previousPath)
-        ? previousPath
-        : file.path
-    if (LOCKFILE.test(lockfilePath)) {
-      reasons.push(`${lockfilePath}: lockfile changes require manual review`)
-    }
-  }
-  for (const file of packageFiles) {
+    if (!isPackageJson(file.path) || file.headMode === '000000') continue
     try {
-      const [before, after] = await Promise.all([
-        fetchFile(client, repo, file.path, pull.baseSha),
-        fetchFile(client, pull.headRepo, file.path, pull.headSha),
-      ])
-      if (after === null) continue
-      const added = findNewDependencies(before ?? '{}', after)
-      if (added.length > 0) {
+      if (file.after === null) throw new Error('missing package manifest')
+      const added = findNewDependencies(file.before ?? '{}', file.after)
+      if (added.length > 0)
         reasons.push(`${file.path}: adds dependencies: ${added.join(', ')}`)
-      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       reasons.push(`${file.path}: could not verify dependencies: ${message}`)

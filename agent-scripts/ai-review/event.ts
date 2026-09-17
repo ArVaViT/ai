@@ -1,4 +1,128 @@
+import type { GitHubClient } from '../../scripts/maintainer/github.ts'
+import { fetchPullRequest } from './pr.ts'
+
 export const AI_REVIEW_TRIGGER_LABEL = 'ai-review'
+
+/** Resolve a completed signal through authenticated GitHub metadata. */
+export async function resolveReviewEvent(input: {
+  eventName: string
+  event: unknown
+  client: GitHubClient
+  repo: string
+}) {
+  if (input.eventName !== 'workflow_run') {
+    const parsed = parseReviewEvent(input)
+    const pr = await fetchPullRequest(input.client, input.repo, parsed.prNumber)
+    if (input.eventName === 'pull_request_target') {
+      const eventPr = isRecord(input.event)
+        ? input.event.pull_request
+        : undefined
+      const head = isRecord(eventPr) ? eventPr.head : undefined
+      const base = isRecord(eventPr) ? eventPr.base : undefined
+      if (
+        !isRecord(head) ||
+        !isRecord(base) ||
+        !isRecord(head.repo) ||
+        !isRecord(base.repo) ||
+        head.sha !== pr.headSha ||
+        head.ref !== pr.headRef ||
+        head.repo.full_name !== pr.headRepo ||
+        base.sha !== pr.baseSha ||
+        base.ref !== pr.baseRef ||
+        base.repo.full_name !== pr.baseRepo
+      ) {
+        throw new Error('Label event no longer matches the pull request')
+      }
+    }
+    return { parsed, pr }
+  }
+  const eventRun = isRecord(input.event) ? input.event.workflow_run : undefined
+  const id = parsePrNumber(isRecord(eventRun) ? eventRun.id : undefined)
+  if (id === null) throw new Error('workflow_run is missing a valid run ID')
+  const run = await input.client.rest(
+    'GET',
+    `/repos/${input.repo}/actions/runs/${id}`,
+  )
+  const workflow = await input.client.rest(
+    'GET',
+    `/repos/${input.repo}/actions/workflows/ai-review-signal.yml`,
+  )
+  if (
+    !isRecord(run) ||
+    !isRecord(workflow) ||
+    run.id !== id ||
+    typeof workflow.id !== 'number' ||
+    run.workflow_id !== workflow.id ||
+    workflow.path !== '.github/workflows/ai-review-signal.yml' ||
+    run.event !== 'pull_request' ||
+    run.status !== 'completed' ||
+    run.conclusion !== 'success' ||
+    !isRecord(run.repository) ||
+    run.repository.full_name !== input.repo ||
+    !isRecord(run.head_repository) ||
+    typeof run.head_repository.full_name !== 'string' ||
+    typeof run.head_branch !== 'string' ||
+    typeof run.head_sha !== 'string' ||
+    !/^[0-9a-f]{40}$/i.test(run.head_sha)
+  ) {
+    throw new Error('workflow_run does not match the trusted signal workflow')
+  }
+  const candidates = new Set<number>()
+  for (let page = 1; ; page++) {
+    const batch = await input.client.rest(
+      'GET',
+      `/repos/${input.repo}/commits/${run.head_sha}/pulls?per_page=100&page=${page}`,
+    )
+    if (!Array.isArray(batch))
+      throw new Error('Invalid workflow_run pull request list')
+    for (const candidate of batch) {
+      if (
+        !isRecord(candidate) ||
+        !isRecord(candidate.head) ||
+        !isRecord(candidate.base) ||
+        !isRecord(candidate.head.repo) ||
+        !isRecord(candidate.base.repo)
+      )
+        throw new Error('Malformed workflow_run pull request')
+      const number = parsePrNumber(candidate.number)
+      if (
+        number !== null &&
+        candidate.state === 'open' &&
+        candidate.base.ref === 'main' &&
+        candidate.base.repo.full_name === input.repo &&
+        candidate.head.sha === run.head_sha &&
+        candidate.head.ref === run.head_branch &&
+        candidate.head.repo.full_name === run.head_repository.full_name
+      )
+        candidates.add(number)
+    }
+    if (batch.length < 100) break
+  }
+  if (candidates.size !== 1)
+    throw new Error('workflow_run has no unique current pull request')
+  const prNumber = [...candidates][0]
+  if (prNumber === undefined)
+    throw new Error('Missing workflow_run pull request')
+  const pr = await fetchPullRequest(input.client, input.repo, prNumber)
+  if (
+    pr.state !== 'open' ||
+    pr.baseRepo !== input.repo ||
+    pr.baseRef !== 'main' ||
+    pr.headSha !== run.head_sha ||
+    pr.headRef !== run.head_branch ||
+    pr.headRepo !== run.head_repository.full_name
+  )
+    throw new Error('workflow_run pull request changed')
+  return {
+    parsed: {
+      prNumber,
+      mode: 'auto',
+      commentAuthor: null,
+      eventName: 'workflow_run',
+    } satisfies ReviewEvent,
+    pr,
+  }
+}
 
 export type ReviewEvent = {
   prNumber: number
@@ -75,8 +199,7 @@ export function isPullRequestLabeledEvent(event: unknown) {
  * Parse a GitHub Actions event into the PR number and auto vs manual mode.
  *
  * A `pull_request` or `pull_request_target` `labeled` event with the `ai-review` label is manual.
- * A `workflow_run` event starts as auto; the caller upgrades it to manual
- * when the PR carries the `ai-review` label (only maintainers can label).
+ * `workflow_run` needs authenticated resolution and is always automatic.
  * Throws if `eventName` is unknown, `workflow_run` has no PR,
  * `workflow_dispatch` has no valid `inputs.pr_number`, or `issue_comment`
  * is not on a pull request.
@@ -107,26 +230,8 @@ export function parseReviewEvent(input: { eventName: string; event: unknown }) {
         eventName,
       } satisfies ReviewEvent
     }
-    case 'workflow_run': {
-      const run = isRecord(input.event) ? input.event.workflow_run : undefined
-      const pulls =
-        isRecord(run) && Array.isArray(run.pull_requests)
-          ? run.pull_requests
-          : []
-      const first = pulls[0]
-      const prNumber = parsePrNumber(isRecord(first) ? first.number : undefined)
-      if (prNumber === null) {
-        throw new Error(
-          'workflow_run event is missing workflow_run.pull_requests[0].number',
-        )
-      }
-      return {
-        prNumber,
-        mode: 'auto',
-        commentAuthor: null,
-        eventName: 'workflow_run',
-      } satisfies ReviewEvent
-    }
+    case 'workflow_run':
+      throw new Error('workflow_run requires authenticated resolution')
     case 'workflow_dispatch': {
       const inputs = isRecord(input.event) ? input.event.inputs : undefined
       const prNumber = parsePrNumber(

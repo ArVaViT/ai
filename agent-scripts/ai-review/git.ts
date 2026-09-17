@@ -1,6 +1,6 @@
 /**
  * Git commit and push helpers. All git I/O goes through an injected runner
- * so tests never spawn git.
+ * so tests can use fixed Git responses or isolated fixture repositories.
  */
 
 export type GitRunner = (
@@ -8,6 +8,116 @@ export type GitRunner = (
   cwd: string,
   input?: string,
 ) => Promise<{ stdout: string; stderr: string; code: number }>
+
+/** Read one complete diff from fixed commits without checking out PR files. */
+export async function readPullSnapshot(
+  repoRoot: string,
+  pull: { baseSha: string; headSha: string },
+  runner: GitRunner,
+) {
+  for (const sha of [pull.baseSha, pull.headSha]) {
+    if (!/^[0-9a-f]{40}$/i.test(sha)) throw new Error('Invalid snapshot SHA')
+  }
+  async function read(args: Array<string>) {
+    const result = await runner(args, repoRoot)
+    if (result.code !== 0) gitFailed(args, result)
+    if (Buffer.byteLength(result.stdout, 'utf8') > 10_000_000) {
+      throw new Error('Review snapshot exceeds 10 MB')
+    }
+    return result.stdout
+  }
+  await read([
+    'fetch',
+    '--no-tags',
+    '--no-recurse-submodules',
+    'origin',
+    pull.baseSha,
+    pull.headSha,
+  ])
+  const mergeBase = (
+    await read(['merge-base', pull.baseSha, pull.headSha])
+  ).trim()
+  if (!/^[0-9a-f]{40}$/i.test(mergeBase))
+    throw new Error('Missing snapshot merge base')
+  const diffArgs = [
+    'diff',
+    '--no-ext-diff',
+    '--no-textconv',
+    '--no-renames',
+    '--no-color',
+    '--no-relative',
+    '--ignore-submodules=none',
+  ]
+  const raw = await read([
+    ...diffArgs,
+    '--raw',
+    '-z',
+    '--no-abbrev',
+    mergeBase,
+    pull.headSha,
+    '--',
+  ])
+  const fields = raw.split('\0')
+  if (fields.pop() !== '' || fields.length % 2 !== 0)
+    throw new Error('Incomplete snapshot file list')
+  const diff = await read([
+    ...diffArgs,
+    '--patch',
+    '--full-index',
+    '--src-prefix=a/',
+    '--dst-prefix=b/',
+    mergeBase,
+    pull.headSha,
+    '--',
+  ])
+  const starts = [...diff.matchAll(/^diff --git /gm)].map(
+    (match) => match.index,
+  )
+  if (diff.length > 0 && starts[0] !== 0)
+    throw new Error('Malformed snapshot patch')
+  const sections = starts.map((start, index) =>
+    diff.slice(start, starts[index + 1]),
+  )
+  if (sections.length !== fields.length / 2)
+    throw new Error('Incomplete snapshot patch')
+  const files = []
+  for (let index = 0; index < fields.length; index += 2) {
+    const header =
+      /^:(\d{6}) (\d{6}) ([0-9a-f]{40}) ([0-9a-f]{40}) ([AMDT])$/.exec(
+        fields[index] ?? '',
+      )
+    const path = fields[index + 1]
+    const patch = sections[index / 2]
+    if (
+      header === null ||
+      path === undefined ||
+      path.length === 0 ||
+      patch === undefined
+    ) {
+      throw new Error('Malformed snapshot file entry')
+    }
+    const baseMode = header[1] ?? ''
+    const headMode = header[2] ?? ''
+    const packageFile = /(^|\/)package\.json$/.test(path)
+    const before =
+      packageFile && ['100644', '100755'].includes(baseMode)
+        ? await read(['cat-file', 'blob', header[3] ?? ''])
+        : null
+    const after =
+      packageFile && ['100644', '100755'].includes(headMode)
+        ? await read(['cat-file', 'blob', header[4] ?? ''])
+        : null
+    files.push({
+      path,
+      patch: /^Binary files |^GIT binary patch$/m.test(patch) ? null : patch,
+      baseMode,
+      headMode,
+      before,
+      after,
+    })
+  }
+  return { mergeBase, diff, files }
+}
 
 function gitFailed(
   args: Array<string>,

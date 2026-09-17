@@ -204,7 +204,7 @@ The bot sets exactly one of these labels:
 
 The bot never GitHub-approves and never merges. The `ready-to-merge` label still means a human approval plus green CI.
 
-If the bot pushes, it only commits bugs and suggestions the review listed. Maintainers can also start a run by adding the `ai-review` label, with a `/ai-review` comment, or from Actions (`workflow_dispatch`). A first-time fork PR needs one workflow approval first.
+If the bot pushes, it only commits bugs and suggestions the review listed. Roster maintainers can request one run by adding `ai-review` or writing `/ai-review`. A user with workflow access can use Actions (`workflow_dispatch`) on `main`. A retained label does not rerun each push. Remove and add it again for another request. A first-time fork PR needs one workflow approval first.
 
 The bot checks the PR before Grok starts. It blocks sensitive automation, agent instructions, symlinks, new executable files, new dependencies, and incomplete patches. Grok runs in a disposable Docker container without the bot's GitHub token. The host validates Grok's patch before it applies or pushes any edit.
 

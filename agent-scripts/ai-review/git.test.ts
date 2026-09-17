@@ -1,12 +1,18 @@
 import { describe, expect, it } from 'vitest'
+import { spawnSync } from 'node:child_process'
+import { mkdtemp, writeFile, rename, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import {
   applyPatch,
   commitAll,
   headRemoteUrl,
   preparePullWorktree,
   pushHead,
+  readPullSnapshot,
 } from './git'
 import type { GitRunner } from './git'
+import { auditPullSecurity } from './security'
 
 type GitResult = { stdout: string; stderr: string; code: number }
 
@@ -16,6 +22,213 @@ const TOKEN = 'ghs_abc'
 const ORIGIN = 'TanStack/ai'
 const FORK = 'alice/ai'
 const REMOTE = `https://x-access-token:tok@github.com/${ORIGIN}.git`
+
+const BASE = 'a'.repeat(40)
+const HEAD = 'b'.repeat(40)
+const MERGE_BASE = 'c'.repeat(40)
+const OLD_BLOB = 'd'.repeat(40)
+const NEW_BLOB = 'e'.repeat(40)
+
+function snapshotRunner(
+  options: {
+    paths?: Array<string>
+    raw?: string
+    diff?: string
+    failFetch?: boolean
+  } = {},
+) {
+  const paths = options.paths ?? ['package.json']
+  return createFakeRunner((args) => {
+    if (args[0] === 'fetch' && options.failFetch)
+      return { stdout: '', stderr: 'missing object', code: 1 }
+    let stdout = ''
+    if (args[0] === 'merge-base') stdout = MERGE_BASE
+    if (args.includes('--raw'))
+      stdout =
+        options.raw ??
+        paths
+          .map((path) => `:100644 100644 ${OLD_BLOB} ${NEW_BLOB} M\0${path}\0`)
+          .join('')
+    if (args.includes('--patch'))
+      stdout =
+        options.diff ??
+        paths
+          .map(
+            (path) =>
+              `diff --git a/${JSON.stringify(path)} b/${JSON.stringify(path)}\n--- old\n+++ new\n@@ -1 +1 @@\n-old\n+new\n`,
+          )
+          .join('')
+    if (args[0] === 'cat-file')
+      stdout = args[2] === OLD_BLOB ? '{}' : '{"dependencies":{"left-pad":"1"}}'
+    return { stdout, stderr: '', code: 0 }
+  })
+}
+
+describe('readPullSnapshot', () => {
+  it('reads real Git renames, modes, UTF-8 paths, and divergent base manifests', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'ai-review-snapshot-'))
+    const run = (args: Array<string>) => {
+      const result = spawnSync(
+        'git',
+        [
+          '-c',
+          'user.name=Fixture',
+          '-c',
+          'user.email=fixture@example.com',
+          '-c',
+          `core.hooksPath=${join(directory, 'no-hooks')}`,
+          ...args,
+        ],
+        { cwd: directory, encoding: 'utf8' },
+      )
+      if (result.status !== 0) throw new Error(result.stderr)
+      return result.stdout.trim()
+    }
+    const runner: GitRunner = async (args, cwd) => {
+      const result = spawnSync('git', args, { cwd, encoding: 'utf8' })
+      return {
+        stdout: result.stdout,
+        stderr: result.stderr,
+        code: result.status ?? 1,
+      }
+    }
+    try {
+      run(['init'])
+      await writeFile(join(directory, 'package.json'), '{}\n')
+      await writeFile(join(directory, 'AGENTS.md'), 'fixture instructions\n')
+      await writeFile(join(directory, 'café.ts'), 'old\n')
+      run(['add', '.'])
+      run(['commit', '-m', 'fixture base'])
+      const mergeBase = run(['rev-parse', 'HEAD'])
+      await writeFile(
+        join(directory, 'package.json'),
+        '{"dependencies":{"left-pad":"1"}}\n',
+      )
+      run(['add', '.'])
+      run(['commit', '-m', 'base update'])
+      const baseSha = run(['rev-parse', 'HEAD'])
+      run(['checkout', '--detach', mergeBase])
+      await writeFile(
+        join(directory, 'package.json'),
+        '{"dependencies":{"left-pad":"1"}}\n',
+      )
+      await rename(
+        join(directory, 'AGENTS.md'),
+        join(directory, 'old-rules.md'),
+      )
+      await writeFile(join(directory, 'café.ts'), 'new\n')
+      run(['add', '.'])
+      run(['update-index', '--chmod=+x', 'café.ts'])
+      run(['commit', '-m', 'head change'])
+      const headSha = run(['rev-parse', 'HEAD'])
+      run(['remote', 'add', 'origin', directory])
+      const snapshot = await readPullSnapshot(
+        directory,
+        { baseSha, headSha },
+        runner,
+      )
+      expect(snapshot.mergeBase).toBe(mergeBase)
+      expect(snapshot.files.map((file) => file.path)).toEqual([
+        'AGENTS.md',
+        'café.ts',
+        'old-rules.md',
+        'package.json',
+      ])
+      expect(
+        snapshot.files.find((file) => file.path === 'AGENTS.md')?.headMode,
+      ).toBe('000000')
+      expect(auditPullSecurity(snapshot).reasons).toEqual([
+        'AGENTS.md: changes security-sensitive instructions or automation',
+        'café.ts: becomes executable',
+        'package.json: adds dependencies: left-pad',
+      ])
+    } finally {
+      await rm(directory, { recursive: true, force: true })
+    }
+  })
+
+  it('uses the merge base and fixed blob IDs without checking out files', async () => {
+    const { runner, calls } = snapshotRunner()
+    const snapshot = await readPullSnapshot(
+      CWD,
+      { baseSha: BASE, headSha: HEAD },
+      runner,
+    )
+    expect(snapshot.mergeBase).toBe(MERGE_BASE)
+    expect(snapshot.files[0]).toMatchObject({
+      path: 'package.json',
+      before: '{}',
+      after: '{"dependencies":{"left-pad":"1"}}',
+    })
+    expect(
+      calls
+        .filter(({ args }) => args[0] === 'diff')
+        .every(
+          ({ args }) =>
+            args.includes(MERGE_BASE) &&
+            args.includes(HEAD) &&
+            args.includes('--no-ext-diff') &&
+            args.includes('--no-textconv') &&
+            args.includes('--no-renames'),
+        ),
+    ).toBe(true)
+    expect(
+      calls.some(
+        ({ args }) => args.includes('checkout') || args.includes('worktree'),
+      ),
+    ).toBe(false)
+  })
+
+  it('keeps dotfiles and control characters from NUL-delimited paths', async () => {
+    const paths = ['.hidden', 'quote"name.ts', 'line\nname.ts']
+    const { runner } = snapshotRunner({ paths })
+    const snapshot = await readPullSnapshot(
+      CWD,
+      { baseSha: BASE, headSha: HEAD },
+      runner,
+    )
+    expect(snapshot.files.map((file) => file.path)).toEqual(paths)
+  })
+
+  it('scans a sensitive path after more than 3000 changed files', async () => {
+    const paths = [
+      ...Array.from({ length: 3001 }, (_, index) => `src/${index}.ts`),
+      '.agents/rules.md',
+    ]
+    const { runner } = snapshotRunner({ paths })
+    const snapshot = await readPullSnapshot(
+      CWD,
+      { baseSha: BASE, headSha: HEAD },
+      runner,
+    )
+    expect(snapshot.files).toHaveLength(3002)
+    expect(auditPullSecurity(snapshot)).toEqual({
+      ok: false,
+      reasons: [
+        '.agents/rules.md: changes security-sensitive instructions or automation',
+      ],
+    })
+  })
+
+  it.each([
+    { raw: 'incomplete' },
+    { raw: `:100644 100644 ${OLD_BLOB} ${NEW_BLOB} R100\0old\0new\0` },
+    { diff: '' },
+  ])('rejects incomplete or unsupported Git output', async (options) => {
+    const { runner } = snapshotRunner(options)
+    await expect(
+      readPullSnapshot(CWD, { baseSha: BASE, headSha: HEAD }, runner),
+    ).rejects.toThrow(/snapshot/i)
+  })
+
+  it('does not fall back to a mutable reference after a fetch failure', async () => {
+    const { runner, calls } = snapshotRunner({ failFetch: true })
+    await expect(
+      readPullSnapshot(CWD, { baseSha: BASE, headSha: HEAD }, runner),
+    ).rejects.toThrow('missing object')
+    expect(calls).toHaveLength(1)
+  })
+})
 
 function createFakeRunner(
   impl?: (args: Array<string>, cwd: string) => GitResult,
