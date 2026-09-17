@@ -20,6 +20,8 @@ Build a streaming React chat in [Basic Chat](../tutorials/basic-chat). The key s
 
 Generate an image from a prompt in [Generate Image](../tutorials/generate-image).
 
+Stream a typed table from `chat({ outputSchema })` in [Streaming Structured Table](../tutorials/streaming-structured-table).
+
 ## Key Features
 
 - ✅ **Type-Safe** - Full TypeScript support with Zod schema inference
