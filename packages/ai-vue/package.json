@@ -28,6 +28,10 @@
     "./ui": {
       "types": "./src/ui.ts",
       "import": "./src/ui.ts"
+    },
+    "./byok": {
+      "types": "./dist/byok.d.ts",
+      "import": "./dist/byok.js"
     }
   },
   "files": [

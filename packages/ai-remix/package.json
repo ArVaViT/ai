@@ -39,7 +39,8 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./ui": "./src/ui.ts"
+    "./ui": "./src/ui.ts",
+    "./byok": "./src/byok.ts"
   },
   "files": [
     "src",

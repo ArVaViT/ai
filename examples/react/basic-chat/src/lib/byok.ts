@@ -1,4 +1,4 @@
-import { defineByok, memoryStorage } from '@tanstack/ai-client/byok'
+import { defineByok, memoryStorage } from '@tanstack/ai-react/byok'
 import { openrouterByok } from '@tanstack/ai-openrouter/byok'
 
 export const byok = defineByok({

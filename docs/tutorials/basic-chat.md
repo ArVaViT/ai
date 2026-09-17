@@ -52,7 +52,7 @@ The next steps build the client. Then they add the route.
 Create `src/lib/byok.ts`. `memoryStorage()` keeps the key in this tab.
 
 ```typescript
-import { defineByok, memoryStorage } from '@tanstack/ai-client/byok'
+import { defineByok, memoryStorage } from '@tanstack/ai-react/byok'
 import { openrouterByok } from '@tanstack/ai-openrouter/byok'
 
 export const byok = defineByok({

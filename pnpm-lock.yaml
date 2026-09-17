@@ -182,9 +182,6 @@ importers:
       '@tanstack/ai':
         specifier: workspace:*
         version: link:../../../packages/ai
-      '@tanstack/ai-client':
-        specifier: workspace:*
-        version: link:../../../packages/ai-client
       '@tanstack/ai-openrouter':
         specifier: workspace:*
         version: link:../../../packages/ai-openrouter
