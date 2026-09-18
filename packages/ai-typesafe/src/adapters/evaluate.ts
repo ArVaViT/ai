@@ -69,10 +69,10 @@ export class TypesafeEvaluateAdapter<
     const body = { model, state, questions }
     const fetchFn = this.fetchFn ?? globalThis.fetch
 
-    logger.request(
-      `activity=evaluate provider=${this.name} model=${model}`,
-      { provider: this.name, model },
-    )
+    logger.request(`activity=evaluate provider=${this.name} model=${model}`, {
+      provider: this.name,
+      model,
+    })
 
     let response: Response
     try {

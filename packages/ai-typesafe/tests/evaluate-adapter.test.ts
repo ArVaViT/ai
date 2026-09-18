@@ -150,11 +150,7 @@ describe('TypesafeEvaluateAdapter', () => {
   })
 })
 
-async function expectStatus(
-  status: number,
-  statusText: string,
-  body: string,
-) {
+async function expectStatus(status: number, statusText: string, body: string) {
   fetchMock.mockResolvedValue(new Response(body, { status, statusText }))
   await expect(adapter().evaluate(evaluateOptions())).rejects.toThrow(
     String(status),

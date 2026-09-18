@@ -252,7 +252,9 @@ function mapScoreAnswer(
 ) {
   const levels = question.criteria
   if (levels.length < 2) {
-    throw new Error(`decide(): score question "${key}" needs at least two levels`)
+    throw new Error(
+      `decide(): score question "${key}" needs at least two levels`,
+    )
   }
   const lastIndex = levels.length - 1
   const rounded = Math.round(wire.score)

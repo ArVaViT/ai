@@ -203,7 +203,9 @@ function toWireAnswer(answer: Record<string, unknown>, confidence: number) {
     }
     case 'score': {
       if (typeof answer.score !== 'number') {
-        throw new Error('Vercel Gateway evaluate score answer was missing score')
+        throw new Error(
+          'Vercel Gateway evaluate score answer was missing score',
+        )
       }
       return {
         type: 'score' as const,
@@ -270,10 +272,10 @@ export class VercelGatewayEvaluateAdapter<
       options
     const mapped = mapGatewayModelOptions(modelOptions)
 
-    logger.request(
-      `activity=evaluate provider=${this.name} model=${model}`,
-      { provider: this.name, model },
-    )
+    logger.request(`activity=evaluate provider=${this.name} model=${model}`, {
+      provider: this.name,
+      model,
+    })
 
     try {
       const response = await fetch(this.evaluateUrl, {
@@ -305,12 +307,17 @@ export class VercelGatewayEvaluateAdapter<
 
       const json: unknown = await response.json()
       if (!isRecord(json)) {
-        throw new Error('Vercel Gateway evaluate response had an unexpected shape')
+        throw new Error(
+          'Vercel Gateway evaluate response had an unexpected shape',
+        )
       }
 
       const result: EvaluateAdapterResult = {
         model: typeof json.model === 'string' ? json.model : model,
-        answers: toWireAnswers(json.answers, confidenceMap(json.providerMetadata)),
+        answers: toWireAnswers(
+          json.answers,
+          confidenceMap(json.providerMetadata),
+        ),
         usage: toTokenUsage(json.usage),
       }
       return result
@@ -366,10 +373,7 @@ export function createVercelGatewayEvaluator<
  */
 export function vercelGatewayEvaluator<
   TModel extends VercelGatewayEvaluateModel,
->(
-  model: TModel,
-  config?: Omit<VercelGatewayEvaluateConfig, 'apiKey'>,
-) {
+>(model: TModel, config?: Omit<VercelGatewayEvaluateConfig, 'apiKey'>) {
   return createVercelGatewayEvaluator(
     model,
     getVercelGatewayApiKeyFromEnv(),

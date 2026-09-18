@@ -90,7 +90,9 @@ it('POSTs to /v4/ai/evaluation-model and maps boolean/choice/score answers', asy
   )
 
   const request = lastRequest()
-  expect(request.url).toBe('https://ai-gateway.vercel.sh/v4/ai/evaluation-model')
+  expect(request.url).toBe(
+    'https://ai-gateway.vercel.sh/v4/ai/evaluation-model',
+  )
   expect(request.url).not.toContain('/chat/completions')
   expect(request.init?.method).toBe('POST')
   expect(new Headers(request.init?.headers).get('Authorization')).toBe(

@@ -78,12 +78,14 @@ export const evaluateTicketFn = createServerFn({ method: 'POST' })
           questions,
         })
       case 'cloudflare':
-        return await evaluator({
+        const res = await evaluator({
           adapter: cloudflareEvaluator('typesafe/jev'),
         }).decide({
           state: ticket,
           questions,
         })
+
+        return res
       default: {
         const exhaustive: never = data.provider
         throw new Error(`Unknown provider: ${exhaustive}`)

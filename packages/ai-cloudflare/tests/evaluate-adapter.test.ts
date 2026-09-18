@@ -161,9 +161,7 @@ describe('evaluate adapter', () => {
   })
 
   it('throws when Workers AI returns an error status', async () => {
-    const fetchMock = vi.fn(
-      async () => new Response('nope', { status: 502 }),
-    )
+    const fetchMock = vi.fn(async () => new Response('nope', { status: 502 }))
     const adapter = createRestEvaluator(fetchMock)
 
     await expect(evaluate(adapter)).rejects.toThrow(

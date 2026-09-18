@@ -95,8 +95,7 @@ function mapUsage(usage: unknown) {
       totalTokens: 0,
     })
   }
-  const promptTokens =
-    readNumber(usage, ['input_tokens', 'prompt_tokens']) ?? 0
+  const promptTokens = readNumber(usage, ['input_tokens', 'prompt_tokens']) ?? 0
   const completionTokens =
     readNumber(usage, ['output_tokens', 'completion_tokens']) ?? 0
   const totalTokens =
@@ -127,9 +126,7 @@ export class OpenRouterEvaluateAdapter<
     this.clientConfig = config
   }
 
-  async evaluate(
-    options: EvaluateOptions<OpenRouterEvaluateProviderOptions>,
-  ) {
+  async evaluate(options: EvaluateOptions<OpenRouterEvaluateProviderOptions>) {
     const { model, state, questions, abortSignal, logger } = options
     const questionKeys = Object.keys(questions)
 
@@ -189,7 +186,9 @@ export class OpenRouterEvaluateAdapter<
  * const adapter = createOpenRouterEvaluator('~typesafe/jev-latest', 'sk-or-...')
  * ```
  */
-export function createOpenRouterEvaluator<TModel extends OpenRouterEvaluateModel>(
+export function createOpenRouterEvaluator<
+  TModel extends OpenRouterEvaluateModel,
+>(
   model: TModel,
   apiKey: string,
   config?: Omit<OpenRouterEvaluateConfig, 'apiKey'>,

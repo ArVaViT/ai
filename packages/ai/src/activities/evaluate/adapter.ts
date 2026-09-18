@@ -30,7 +30,10 @@ export type EvaluateInstructions = EvaluateJsonValue
  * - TOptions: option key to description (or `null` when the key is enough)
  */
 export interface WireChoiceQuestion<
-  TOptions extends Record<string, string | null> = Record<string, string | null>,
+  TOptions extends Record<string, string | null> = Record<
+    string,
+    string | null
+  >,
 > {
   type: 'choice'
   instructions: EvaluateInstructions

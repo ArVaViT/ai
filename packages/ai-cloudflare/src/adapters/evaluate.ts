@@ -37,10 +37,10 @@ export class CloudflareEvaluateAdapter<
   async evaluate(options: EvaluateOptions) {
     const { model, state, questions, abortSignal, logger } = options
     try {
-      logger.request(
-        `activity=evaluate provider=${this.name} model=${model}`,
-        { provider: this.name, model },
-      )
+      logger.request(`activity=evaluate provider=${this.name} model=${model}`, {
+        provider: this.name,
+        model,
+      })
       const output = (await runModel(
         this.cfConfig,
         model,
