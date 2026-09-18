@@ -627,7 +627,7 @@
           "label": "Text-to-Speech",
           "to": "media/text-to-speech",
           "addedAt": "2026-04-15",
-          "updatedAt": "2026-08-04"
+          "updatedAt": "2026-09-16"
         },
         {
           "label": "Transcription",
@@ -1016,7 +1016,7 @@
           "label": "Google Gemini",
           "to": "adapters/gemini",
           "addedAt": "2026-04-15",
-          "updatedAt": "2026-09-03"
+          "updatedAt": "2026-09-16"
         },
         {
           "label": "Google Vertex AI",
@@ -1058,7 +1058,7 @@
           "label": "ElevenLabs",
           "to": "adapters/elevenlabs",
           "addedAt": "2026-04-15",
-          "updatedAt": "2026-09-03"
+          "updatedAt": "2026-09-16"
         },
         {
           "label": "fal.ai",
