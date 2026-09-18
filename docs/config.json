@@ -90,6 +90,11 @@
           "label": "Streaming Structured Table",
           "to": "framework/react/examples/streaming-structured-table",
           "addedAt": "2026-09-17"
+        },
+        {
+          "label": "Evaluate",
+          "to": "framework/react/examples/evaluate",
+          "addedAt": "2026-09-18"
         }
       ]
     },

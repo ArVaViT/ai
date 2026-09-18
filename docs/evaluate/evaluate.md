@@ -466,16 +466,15 @@ If a question key is `meta`, `decide()` throws.
 
 ## Runnable Example
 
-`examples/ts-react-evaluate` is a small TanStack Start app that runs this page.
+`examples/react/evaluate` is a small TanStack Start app that runs this page.
 Paste a support ticket. The UI shows queue, urgency, and refund.
 A dropdown switches among the four adapters over the same `decide()` call.
 
 ```bash
-cd examples/ts-react-evaluate
-pnpm install
-cp .env.example .env
-pnpm dev
+pnpm --filter evaluate dev
 ```
+
+Open http://localhost:3100. Copy `.env.example` to `.env` first, and add a key for the adapter you pick.
 
 Add a key for the adapter you pick. Then open the app and paste a ticket.
 

@@ -9,6 +9,7 @@ Choose an example based on your use case:
 - **Want the smallest React + Start chat?** → [Basic Chat](#basic-chat)
 - **Want an image from a prompt?** → [Generate Image](#generate-image)
 - **Want a table that fills as JSON streams?** → [Streaming Structured Table](#streaming-structured-table)
+- **Want typed ticket routing?** → [Evaluate](#evaluate)
 - **Want a full-stack TypeScript app?** → [TanStack Chat (ts-react-chat)](#tanstack-chat-ts-react-chat)
 - **Need a live world stream?** → [World generation (ts-react-media)](#world-generation-ts-react-media)
 - **Need a vanilla JS frontend?** → [Vanilla Chat](#vanilla-chat)
@@ -68,6 +69,24 @@ pnpm --filter streaming-structured-table dev
 Open http://localhost:3100. Paste an OpenRouter key. Send `Compare 6 JavaScript frameworks`.
 
 📖 [Full Documentation](react/streaming-structured-table/README.md)
+
+---
+
+### Evaluate
+
+A slim TanStack Start app. Paste a support ticket. Jev answers queue, urgency, and refund.
+
+**Path:** `examples/react/evaluate`
+
+**Getting Started:**
+
+```bash
+pnpm --filter evaluate dev
+```
+
+Open http://localhost:3100. Add a key in `.env`. Pick a provider. Click Submit.
+
+📖 [Full Documentation](react/evaluate/README.md)
 
 ---
 
@@ -183,41 +202,6 @@ pnpm dev
 ```
 
 📖 [Full Documentation](ts-react-rerank/README.md)
-
----
-
-### Evaluate (ts-react-evaluate)
-
-A single-page app that asks Jev three typed questions about a support ticket:
-which queue, how urgent, and whether the customer asks for a refund.
-
-**Tech Stack:**
-
-- TanStack Start (full-stack React framework)
-- `@tanstack/ai` (the `evaluator()` activity)
-- `@tanstack/ai-typesafe` (TypeSafe Jev adapter)
-- `@tanstack/ai-openrouter` (OpenRouter Jev adapter)
-- `@tanstack/ai-vercel-gateway` (Vercel AI Gateway Jev adapter)
-- `@tanstack/ai-cloudflare` (Cloudflare Workers AI Jev adapter)
-
-**Features:**
-
-- ✅ One `decide()` call, four providers behind a dropdown
-- ✅ Choice, score, and boolean answers on one ticket
-- ✅ Queue, urgency, refund, and resolved model on the result panel
-- ✅ API keys stay on the server
-
-**Getting Started:**
-
-```bash
-cd examples/ts-react-evaluate
-pnpm install
-cp .env.example .env
-# Add the key for the provider you pick
-pnpm dev
-```
-
-📖 [Full Documentation](ts-react-evaluate/README.md)
 
 ---
 

@@ -1,11 +1,10 @@
 {
-  "name": "ts-react-evaluate",
+  "name": "evaluate",
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite dev --port 3000",
+    "dev": "vite dev --port 3100",
     "build": "vite build",
-    "serve": "vite preview",
     "test": "exit 0",
     "test:types": "tsc"
   },
@@ -20,7 +19,6 @@
     "@tanstack/react-start": "^1.159.0",
     "@tanstack/router-plugin": "^1.158.4",
     "lucide-react": "^0.561.0",
-    "nitro": "3.0.260610-beta",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
     "tailwindcss": "^4.1.18"

@@ -133,6 +133,14 @@ The `decide()` call stays the same. Only the adapter changes.
 - Vercel AI Gateway: `vercelGatewayEvaluator('typesafe-ai/jev')` and `AI_GATEWAY_API_KEY`
 - Cloudflare: `cloudflareEvaluator('typesafe/jev')` and a Worker binding, or `CLOUDFLARE_ACCOUNT_ID` plus `CLOUDFLARE_API_TOKEN`
 
-A full Start app with a provider dropdown lives in `examples/ts-react-evaluate`.
+## 6. Try it
+
+Run the app. Paste a ticket. Pick a provider. Click Submit.
+
+The same app is on the Examples tab at `/ai/latest/docs/framework/react/examples/evaluate`.
+
+<!-- ::client-example library=ai framework=react slug=evaluate -->
+
+The full example is on GitHub: [TanStack/ai `examples/react/evaluate`](https://github.com/TanStack/ai/tree/main/examples/react/evaluate).
 
 See the [Evaluate guide](../evaluate/evaluate) for abort, middleware, and the full result shape.
