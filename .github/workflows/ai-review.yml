@@ -9,7 +9,8 @@ name: AI review
 # See https://tanstack.com/blog/npm-supply-chain-compromise-postmortem
 
 # The host checks out and builds main only and never runs PR files. PR code
-# runs only in the Docker sandbox, which gets XAI_API_KEY and no GitHub token.
+# runs only in the Docker sandbox, which gets a per-run xAI key that expires
+# and no GitHub token. The xAI management key stays on the host.
 on: # zizmor: ignore[dangerous-triggers] The host uses no artifacts and runs no PR files.
   workflow_run:
     workflows: ['AI review signal']
@@ -64,7 +65,8 @@ jobs:
         id: guard
         env:
           AI_REVIEW_TOKEN: ${{ secrets.AI_REVIEW_TOKEN }}
-          XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
+          XAI_MANAGEMENT_KEY: ${{ secrets.XAI_MANAGEMENT_KEY }}
+          XAI_TEAM_ID: ${{ secrets.XAI_TEAM_ID }}
           GH_TOKEN: ${{ secrets.AI_REVIEW_TOKEN }}
         shell: bash
         run: |
@@ -74,8 +76,8 @@ jobs:
             echo "::error::AI review cannot run: $1"
             exit 1
           }
-          if [ -z "${AI_REVIEW_TOKEN}" ] || [ -z "${XAI_API_KEY}" ]; then
-            fail "missing AI_REVIEW_TOKEN or XAI_API_KEY"
+          if [ -z "${AI_REVIEW_TOKEN}" ] || [ -z "${XAI_MANAGEMENT_KEY}" ] || [ -z "${XAI_TEAM_ID}" ]; then
+            fail "missing AI_REVIEW_TOKEN, XAI_MANAGEMENT_KEY, or XAI_TEAM_ID"
           fi
           MACHINE="$(gh api user --jq .login)"
           LOGIN_PATTERN='^[A-Za-z0-9]([A-Za-z0-9-]{0,37}[A-Za-z0-9])?$'
@@ -89,6 +91,7 @@ jobs:
         run: pnpm ai-review
         env:
           AI_REVIEW_TOKEN: ${{ secrets.AI_REVIEW_TOKEN }}
-          XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
+          XAI_MANAGEMENT_KEY: ${{ secrets.XAI_MANAGEMENT_KEY }}
+          XAI_TEAM_ID: ${{ secrets.XAI_TEAM_ID }}
           AI_REVIEW_WORKTREE: ${{ github.workspace }}/.pr-head
           AI_REVIEW_MACHINE_USER: ${{ steps.guard.outputs.machine_user }}

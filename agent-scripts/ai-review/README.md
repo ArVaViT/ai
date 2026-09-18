@@ -8,12 +8,13 @@ The first lines of every bot comment say the comment is automated. It is not a m
 
 1. A machine GitHub user with write access on this repo.
 2. A PAT for that user, stored as repo secret `AI_REVIEW_TOKEN`. The PAT needs `repo` so it can comment, label, push polish commits, and approve waiting Actions runs.
-3. An xAI key, stored as repo secret `XAI_API_KEY`. Use a key only for this bot, with a spend limit. See **Security boundary** for the reason.
-4. Docker on the review runner.
+3. An xAI management key, stored as repo secret `XAI_MANAGEMENT_KEY`. Get it at xAI Console -> Settings -> Management Keys. It is not an API key. The job uses it to make one API key for each run. See **Security boundary** for the reason.
+4. Your xAI team ID, stored as repo secret `XAI_TEAM_ID`. Set a spend limit on this team.
+5. Docker on the review runner.
 
 The workflow reads the machine user's login from the PAT. `tanstack-ai-bot` is only the default for a local run.
 
-Until both secrets exist, the job fails red. Every trigger runs in the TanStack repo with secrets, so a missing secret is a broken setup. The job does not run in a fork of this repo. It does not comment as `github-actions[bot]`.
+Until all three secrets exist, the job fails red. Every trigger runs in the TanStack repo with secrets, so a missing secret is a broken setup. The job does not run in a fork of this repo. It does not comment as `github-actions[bot]`.
 
 ## How a run starts
 
@@ -39,7 +40,9 @@ Before a new audit, the host removes stale `secure` and `ai-ready` labels. An au
 - A lockfile change
 - A shell download, encoded PowerShell command, or reverse shell
 
-Grok clones the exact PR commit into a disposable Docker container. The container does not receive `AI_REVIEW_TOKEN`, mount host files, or get a `host.docker.internal` alias. It receives `XAI_API_KEY` and has network access because Grok needs the xAI API. The Docker provider cannot restrict network destinations. Grok CLI child commands can read `XAI_API_KEY`. PR code or model commands can expose it through network access. Docker, prompt rules, the host scanner, and `hostGateway: false` do not protect this key. The GitHub token stays outside the container. The key can also leak through the job log. The host blocks a generated patch or review text that holds the exact key, but it cannot see a changed form of the key. This xAI key risk remains in this design, so use a key only for this bot, with a spend limit.
+Grok clones the exact PR commit into a disposable Docker container. The container does not receive `AI_REVIEW_TOKEN`, mount host files, or get a `host.docker.internal` alias. It receives a per-run `XAI_API_KEY` and has network access because Grok needs the xAI API. The Docker provider cannot restrict network destinations. Grok CLI child commands can read `XAI_API_KEY`. PR code or model commands can expose it through network access. Docker, prompt rules, the host scanner, and `hostGateway: false` do not protect this key. The GitHub token stays outside the container. The key can also leak through the job log. The host blocks a generated patch or review text that holds the exact key, but it cannot see a changed form of the key.
+
+So the container never gets a long-lived key. For each run, the host uses `XAI_MANAGEMENT_KEY` to make an API key that expires 35 minutes later, 5 minutes after the job timeout. The host deletes the key when the run ends. If the job is cancelled, the delete does not run and the key expires by itself. The management key stays on the host, and the git child processes do not get it. A stolen per-run key still works until the run ends or the key expires. It has no rate limit, because a low limit can stop a review part way. Set a spend limit on the xAI team.
 
 A blocked PR gets a bot comment with the head SHA and the reasons. A draft or a roster-maintainer PR that automatic review skips gets no comment. It gets no verdict label, and the job stays green. A failed `git fetch` is not a block. It fails the job red.
 
@@ -72,7 +75,7 @@ When the verdict is `ai-ready` and the host scan is clean, the bot approves wait
 pnpm test:ai-review
 ```
 
-A full agent run needs Docker, `AI_REVIEW_TOKEN`, `XAI_API_KEY`, `GITHUB_EVENT_NAME`, `GITHUB_EVENT_PATH`, `GITHUB_REPOSITORY`, and `AI_REVIEW_WORKTREE` set to the path where a temporary PR worktree can be created. Do not run `pnpm install` in that worktree.
+A full agent run needs Docker, `AI_REVIEW_TOKEN`, `XAI_MANAGEMENT_KEY`, `XAI_TEAM_ID`, `GITHUB_EVENT_NAME`, `GITHUB_EVENT_PATH`, `GITHUB_REPOSITORY`, and `AI_REVIEW_WORKTREE` set to the path where a temporary PR worktree can be created. Do not run `pnpm install` in that worktree.
 
 ## Failed run
 
@@ -80,7 +83,8 @@ Open the **AI review** workflow log. The job prints text, reasoning, tool input/
 
 Common causes:
 
-- Missing `AI_REVIEW_TOKEN` or `XAI_API_KEY` (the job fails red)
+- Missing `AI_REVIEW_TOKEN`, `XAI_MANAGEMENT_KEY`, or `XAI_TEAM_ID` (the job fails red)
+- The xAI management API refused the key create call (`xAI key create failed: HTTP ...`)
 - `git fetch` of the base or head commit failed
 - Fork with maintainer edits off (comment is posted, label is `ai-needs-work`, no push)
 - `chat()` did not return a valid verdict object

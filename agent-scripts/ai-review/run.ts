@@ -59,6 +59,7 @@ import { approveWaitingWorkflows, setSecureLabel } from './secure.ts'
 import { auditPullSecurity, scanGeneratedDiff } from './security.ts'
 import { shouldSkip } from './skip.ts'
 import { parseVerdict, reviewLabelFor, reviewVerdictSchema } from './verdict.ts'
+import { deleteRunKey, mintRunKey } from './xai-key.ts'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -182,9 +183,8 @@ function matchesPullIdentity(
  * `grokBuildText` streams tools first, then a `structured-output.complete`
  * event. Do not call this from unit tests.
  */
-export function createGrokReview() {
+export function createGrokReview(xaiKey: string) {
   return async (input: ReviewInput) => {
-    const xaiKey = process.env.XAI_API_KEY
     const sandbox = defineSandbox({
       id: 'ai-review',
       provider: dockerSandbox({
@@ -202,10 +202,9 @@ export function createGrokReview() {
           serial(`test "$(git rev-parse HEAD)" = '${input.pr.headSha}'`)
           serial(GROK_CLI_INSTALL_COMMAND)
         },
-        // Grok CLI child commands can read this key. Network access can expose it.
-        ...(xaiKey !== undefined && xaiKey.length > 0
-          ? { secrets: createSecrets({ XAI_API_KEY: xaiKey }) }
-          : {}),
+        // Grok CLI child commands can read this key. Network access can expose
+        // it, so `main` passes a per-run key that expires. See `xai-key.ts`.
+        secrets: createSecrets({ XAI_API_KEY: xaiKey }),
       }),
       lifecycle: {
         reuse: 'none',
@@ -594,6 +593,7 @@ function createProcessGitRunner(): GitRunner {
       const env = { ...process.env }
       delete env.AI_REVIEW_TOKEN
       delete env.XAI_API_KEY
+      delete env.XAI_MANAGEMENT_KEY
       const child = spawn('git', args, { cwd, env })
       let stdout = ''
       let stderr = ''
@@ -655,11 +655,15 @@ function isExecutedDirectly() {
 /**
  * Production entry. Fills `runReviewJob` opts from env.
  *
- * Needs `AI_REVIEW_TOKEN` (or a resolvable GitHub token) and `XAI_API_KEY`.
+ * Needs `AI_REVIEW_TOKEN` (or a resolvable GitHub token), `XAI_MANAGEMENT_KEY`,
+ * and `XAI_TEAM_ID`.
  */
 export async function main() {
   const token = await resolveReviewToken()
-  requireEnv('XAI_API_KEY')
+  const xai = {
+    managementKey: requireEnv('XAI_MANAGEMENT_KEY'),
+    teamId: requireEnv('XAI_TEAM_ID'),
+  }
   const eventName = process.env.GITHUB_EVENT_NAME
   const eventPath = process.env.GITHUB_EVENT_PATH
   const repo = process.env.GITHUB_REPOSITORY
@@ -686,6 +690,7 @@ export async function main() {
   const machineUserLogin =
     process.env.AI_REVIEW_MACHINE_USER ?? 'tanstack-ai-bot'
   const client = createGitHubClient({ token })
+  const runKey = await mintRunKey(xai)
   const result = await runReviewJob({
     client,
     repo,
@@ -697,7 +702,8 @@ export async function main() {
     repoRoot,
     machineUserLogin,
     gitRunner: createProcessGitRunner(),
-    review: createGrokReview(),
+    review: createGrokReview(runKey.apiKey),
+    sandboxSecrets: [runKey.apiKey],
     prepareWorktree: ({ number, headSha, worktreeRoot: pullWorktree }) =>
       preparePullWorktree(
         repoRoot,
@@ -706,6 +712,16 @@ export async function main() {
         headSha,
         createProcessGitRunner(),
       ),
+  }).finally(async () => {
+    // The key expires by itself, so a failed delete must not hide the result.
+    await deleteRunKey({ ...xai, apiKeyId: runKey.apiKeyId }).catch(
+      (error: unknown) => {
+        console.error(
+          '::warning::ai-review could not delete the run key',
+          error,
+        )
+      },
+    )
   })
   if (result.skipped) {
     console.log(`ai-review skipped: ${result.reason}`)
