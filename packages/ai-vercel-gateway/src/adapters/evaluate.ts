@@ -31,6 +31,9 @@ export type VercelGatewayEvaluateProviderOptions = Record<string, unknown> & {
 const EVALUATE_PATH = '/v4/ai/evaluation-model'
 const DEFAULT_EVALUATE_URL = `https://ai-gateway.vercel.sh${EVALUATE_PATH}`
 
+/** The gateway rejects the request with 400 when this header is absent. */
+const GATEWAY_PROTOCOL_VERSION = '0.0.1'
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -284,6 +287,7 @@ export class VercelGatewayEvaluateAdapter<
           ...this.extraHeaders,
           Authorization: `Bearer ${this.apiKey}`,
           'Content-Type': 'application/json',
+          'ai-gateway-protocol-version': GATEWAY_PROTOCOL_VERSION,
           'ai-evaluation-model-specification-version': '4',
           'ai-model-id': model,
         },

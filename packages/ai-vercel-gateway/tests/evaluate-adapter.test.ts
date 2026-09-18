@@ -98,6 +98,9 @@ it('POSTs to /v4/ai/evaluation-model and maps boolean/choice/score answers', asy
   expect(new Headers(request.init?.headers).get('Authorization')).toBe(
     'Bearer gw_test_key',
   )
+  expect(
+    new Headers(request.init?.headers).get('ai-gateway-protocol-version'),
+  ).toBe('0.0.1')
   expect(request.body).toEqual({
     model: 'typesafe-ai/jev',
     state: 'The support agent issued a full refund to the customer.',
