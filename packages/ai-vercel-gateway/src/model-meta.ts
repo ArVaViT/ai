@@ -44,6 +44,7 @@ export const VERCEL_GATEWAY_CHAT_MODELS = [
   'alibaba/qwen3.8-flash',
   'alibaba/qwen3.8-max',
   'alibaba/qwen3.8-max-0902',
+  'alibaba/qwen3.8-omni-flash',
   'amazon/nova-2-lite',
   'amazon/nova-lite',
   'amazon/nova-micro',
@@ -288,6 +289,7 @@ export const VERCEL_GATEWAY_CHAT_MODELS = [
   'zai/glm-5.3',
   'zai/glm-5.3-fast',
   'zai/glm-5.3-flash',
+  'zai/glm-5.3-flashx',
   'zai/glm-5v-turbo',
 ] as const
 
@@ -681,6 +683,18 @@ export type VercelGatewayChatModelProviderOptionsByName = {
       | 'stop'
       | 'reasoning'
       | 'include_reasoning'
+    >
+  'alibaba/qwen3.8-omni-flash': VercelGatewayCommonOptions &
+    Pick<
+      VercelGatewayBaseOptions,
+      | 'max_tokens'
+      | 'max_output_tokens'
+      | 'temperature'
+      | 'stop'
+      | 'reasoning'
+      | 'include_reasoning'
+      | 'response_format'
+      | 'structured_outputs'
     >
   'amazon/nova-2-lite': VercelGatewayCommonOptions &
     Pick<
@@ -2666,6 +2680,16 @@ export type VercelGatewayChatModelProviderOptionsByName = {
       | 'reasoning'
       | 'include_reasoning'
     >
+  'zai/glm-5.3-flashx': VercelGatewayCommonOptions &
+    Pick<
+      VercelGatewayBaseOptions,
+      | 'max_tokens'
+      | 'max_output_tokens'
+      | 'temperature'
+      | 'stop'
+      | 'reasoning'
+      | 'include_reasoning'
+    >
   'zai/glm-5v-turbo': VercelGatewayCommonOptions &
     Pick<
       VercelGatewayBaseOptions,
@@ -2709,6 +2733,7 @@ export type VercelGatewayModelInputModalitiesByName = {
   'alibaba/qwen3.8-flash': readonly ['text', 'image', 'document']
   'alibaba/qwen3.8-max': readonly ['text', 'image']
   'alibaba/qwen3.8-max-0902': readonly ['text', 'image', 'document']
+  'alibaba/qwen3.8-omni-flash': readonly ['text', 'image']
   'amazon/nova-2-lite': readonly ['text', 'image', 'document']
   'amazon/nova-lite': readonly ['text', 'image', 'document']
   'amazon/nova-micro': readonly ['text']
@@ -2972,6 +2997,7 @@ export type VercelGatewayModelInputModalitiesByName = {
   'zai/glm-5.3': readonly ['text']
   'zai/glm-5.3-fast': readonly ['text']
   'zai/glm-5.3-flash': readonly ['text', 'image']
+  'zai/glm-5.3-flashx': readonly ['text', 'image']
   'zai/glm-5v-turbo': readonly ['text', 'image', 'document']
 }
 

@@ -1830,6 +1830,49 @@
     }
   },
   {
+    "id": "alibaba/qwen3.8-omni-flash",
+    "object": "model",
+    "created": 1755815280,
+    "released": 1789603200,
+    "owned_by": "alibaba",
+    "name": "Qwen 3.8 Omni Flash",
+    "description": "Qwen3.8-Omni-Flash is Alibaba’s native multimodal model for understanding text, images, audio, and video and generating text. Built on Qwen3.8-Flash-Next, it supports a 1M-token context window, reasoning, and tool calling for coding, knowledge work, and multimedia analysis.",
+    "context_window": 1000000,
+    "max_tokens": 131072,
+    "type": "language",
+    "zdr": "all",
+    "no_training": "all",
+    "tags": [
+      "implicit-caching",
+      "reasoning",
+      "structured-output",
+      "tool-use",
+      "vision"
+    ],
+    "supported_specifications": ["v2", "v3", "v4"],
+    "modalities": {
+      "input": ["text", "image"],
+      "output": ["text"]
+    },
+    "supported_parameters": [
+      "max_tokens",
+      "temperature",
+      "stop",
+      "tools",
+      "tool_choice",
+      "reasoning",
+      "include_reasoning",
+      "response_format",
+      "structured_outputs"
+    ],
+    "temperature": true,
+    "pricing": {
+      "input": "0.00000015",
+      "output": "0.00000047",
+      "input_cache_read": "0.000000016"
+    }
+  },
+  {
     "id": "alibaba/wan-v2.5-t2v-preview",
     "object": "model",
     "created": 1755815280,
@@ -14966,6 +15009,7 @@
     "supported_parameters": ["max_tokens", "temperature", "stop"],
     "temperature": true,
     "pricing": {
+      "web_search": "10",
       "realtime_session_duration_cost_per_second": "0.0008334"
     }
   },
@@ -19114,6 +19158,41 @@
           "input_cache_read": "0.00000003"
         }
       }
+    }
+  },
+  {
+    "id": "zai/glm-5.3-flashx",
+    "object": "model",
+    "created": 1755815280,
+    "released": 1789689600,
+    "owned_by": "zai",
+    "name": "GLM 5.3 FlashX",
+    "description": "GLM-5.3-FlashX is the high-speed serving option for Z.ai’s native multimodal coding model, featuring 320B total parameters, 18B activated parameters, and a 1M-token context window. Its efficient hybrid attention architecture supports visual coding, tool use, and end-to-end professional workflows across code, browsers, documents, and graphical interfaces.",
+    "context_window": 1000000,
+    "max_tokens": 131072,
+    "type": "language",
+    "zdr": "none",
+    "no_training": "none",
+    "tags": ["reasoning", "tool-use", "implicit-caching", "vision"],
+    "supported_specifications": ["v2", "v3", "v4"],
+    "modalities": {
+      "input": ["text", "image"],
+      "output": ["text"]
+    },
+    "supported_parameters": [
+      "max_tokens",
+      "temperature",
+      "stop",
+      "tools",
+      "tool_choice",
+      "reasoning",
+      "include_reasoning"
+    ],
+    "temperature": true,
+    "pricing": {
+      "input": "0.00000037",
+      "output": "0.00000125",
+      "input_cache_read": "0.000000075"
     }
   },
   {
