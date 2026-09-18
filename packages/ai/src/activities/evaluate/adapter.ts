@@ -47,7 +47,7 @@ export interface WireChoiceQuestion<
  * - TLevels: ordered level labels, at least two
  */
 export interface WireScoreQuestion<
-  TLevels extends readonly string[] = readonly string[],
+  TLevels extends ReadonlyArray<string> = ReadonlyArray<string>,
 > {
   type: 'score'
   instructions: EvaluateInstructions

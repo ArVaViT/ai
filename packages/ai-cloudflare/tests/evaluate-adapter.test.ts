@@ -73,7 +73,7 @@ function evaluate(adapter: ReturnType<typeof createRestEvaluator>) {
 
 describe('evaluate adapter', () => {
   it('maps TypeSafe answers and usage from a REST 200 and forwards gateway headers', async () => {
-    const fetchMock = vi.fn(async () =>
+    const fetchMock = vi.fn<typeof fetch>(async () =>
       Response.json({
         success: true,
         result: {
@@ -161,7 +161,9 @@ describe('evaluate adapter', () => {
   })
 
   it('throws when Workers AI returns an error status', async () => {
-    const fetchMock = vi.fn(async () => new Response('nope', { status: 502 }))
+    const fetchMock = vi.fn<typeof fetch>(
+      async () => new Response('nope', { status: 502 }),
+    )
     const adapter = createRestEvaluator(fetchMock)
 
     await expect(evaluate(adapter)).rejects.toThrow(

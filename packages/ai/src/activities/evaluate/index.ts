@@ -113,7 +113,7 @@ export type InferEvaluateAnswer<TQuestion> = TQuestion extends {
     ? ChoiceAnswer<Extract<keyof TCriteria, string>>
     : ChoiceAnswer
   : TQuestion extends { type: 'score'; criteria: infer TLevels }
-    ? TLevels extends readonly string[]
+    ? TLevels extends ReadonlyArray<string>
       ? ScoreAnswer<TLevels[number] & string>
       : ScoreAnswer
     : TQuestion extends { type: 'noul' }
@@ -406,7 +406,7 @@ export function choice<
  * })
  * ```
  */
-export function score<const TLevels extends readonly string[]>(options: {
+export function score<const TLevels extends ReadonlyArray<string>>(options: {
   instructions: EvaluateInstructions
   levels: TLevels
 }) {
