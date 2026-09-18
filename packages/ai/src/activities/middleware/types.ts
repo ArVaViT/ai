@@ -43,6 +43,7 @@ export type GenerationActivity =
   | 'transcription'
   | 'embedding'
   | 'rerank'
+  | 'evaluate'
   | 'summarize'
   | 'world'
   | 'liveVideo'

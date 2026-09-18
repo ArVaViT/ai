@@ -23,6 +23,7 @@ import type { AnyTTSAdapter } from './generateSpeech/adapter'
 import type { AnyTranscriptionAdapter } from './generateTranscription/adapter'
 import type { AnyEmbeddingAdapter } from './embed/adapter'
 import type { AnyRerankAdapter } from './rerank/adapter'
+import type { AnyEvaluateAdapter } from './evaluate/adapter'
 import type { AnyWorldAdapter } from './generateWorld/adapter'
 import type { AnyLiveVideoAdapter } from './generateLiveVideo/adapter'
 
@@ -88,6 +89,47 @@ export {
   type RerankAdapterConfig,
   type AnyRerankAdapter,
 } from './rerank/adapter'
+
+// ===========================
+// Evaluate Activity
+// ===========================
+
+export {
+  kind as evaluateKind,
+  evaluator,
+  choice,
+  score,
+  boolean,
+  type EvaluatorConfig,
+  type EvaluateDecideOptions,
+  type EvaluateResult,
+  type EvaluateResultMeta,
+  type EvaluateProviderOptions,
+  type ChoiceAnswer,
+  type ScoreAnswer,
+  type BooleanAnswer,
+  type InferEvaluateAnswer,
+} from './evaluate/index'
+
+export {
+  BaseEvaluateAdapter,
+  type EvaluateAdapter,
+  type EvaluateAdapterConfig,
+  type AnyEvaluateAdapter,
+  type EvaluateOptions,
+  type EvaluateAdapterResult,
+  type EvaluateState,
+  type EvaluateInstructions,
+  type EvaluateJsonValue,
+  type WireQuestion,
+  type WireAnswer,
+  type WireChoiceQuestion,
+  type WireScoreQuestion,
+  type WireNoulQuestion,
+  type WireChoiceAnswer,
+  type WireScoreAnswer,
+  type WireNoulAnswer,
+} from './evaluate/adapter'
 
 // ===========================
 // Image Activity
@@ -266,6 +308,7 @@ export type AIAdapter =
   | AnyTranscriptionAdapter
   | AnyEmbeddingAdapter
   | AnyRerankAdapter
+  | AnyEvaluateAdapter
   | AnyWorldAdapter
   | AnyLiveVideoAdapter
 
@@ -280,5 +323,6 @@ export type AdapterKind =
   | 'transcription'
   | 'embedding'
   | 'rerank'
+  | 'evaluate'
   | 'world'
   | 'liveVideo'

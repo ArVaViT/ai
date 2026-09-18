@@ -186,6 +186,41 @@ pnpm dev
 
 ---
 
+### Evaluate (ts-react-evaluate)
+
+A single-page app that asks Jev three typed questions about a support ticket:
+which queue, how urgent, and whether the customer asks for a refund.
+
+**Tech Stack:**
+
+- TanStack Start (full-stack React framework)
+- `@tanstack/ai` (the `evaluator()` activity)
+- `@tanstack/ai-typesafe` (TypeSafe Jev adapter)
+- `@tanstack/ai-openrouter` (OpenRouter Jev adapter)
+- `@tanstack/ai-vercel-gateway` (Vercel AI Gateway Jev adapter)
+- `@tanstack/ai-cloudflare` (Cloudflare Workers AI Jev adapter)
+
+**Features:**
+
+- ✅ One `decide()` call, four providers behind a dropdown
+- ✅ Choice, score, and boolean answers on one ticket
+- ✅ Queue, urgency, refund, and resolved model on the result panel
+- ✅ API keys stay on the server
+
+**Getting Started:**
+
+```bash
+cd examples/ts-react-evaluate
+pnpm install
+cp .env.example .env
+# Add the key for the provider you pick
+pnpm dev
+```
+
+📖 [Full Documentation](ts-react-evaluate/README.md)
+
+---
+
 ### World generation (ts-react-media)
 
 The media example has a **World** tab. Paste a Reactor key in the header
