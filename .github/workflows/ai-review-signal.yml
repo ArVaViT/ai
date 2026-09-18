@@ -1,9 +1,10 @@
 name: AI review signal
 
-# Unprivileged tripwire. Runs on every PR event with no secrets and no
-# checkout, then exits. Its completion fires the privileged AI review
-# workflow (workflow_run), which runs on the base branch with secrets.
-# This job must always succeed: the review workflow only starts on success.
+# Unprivileged tripwire. Runs on opened, synchronize, and ready_for_review for
+# PRs that target main, with no secrets and no checkout, then exits. GitHub can
+# hold it for approval for a first-time contributor. Its completion fires the
+# privileged AI review workflow (workflow_run), which runs on main with secrets.
+# The review job is skipped unless this run concludes `success`.
 # Never add secrets, checkouts, or install steps here.
 
 on:

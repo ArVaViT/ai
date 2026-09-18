@@ -1,5 +1,5 @@
 /**
- * Git commit and push helpers. All git I/O goes through an injected runner
+ * Git snapshot, patch, worktree, commit, and push helpers. All git I/O goes through an injected runner
  * so tests can use fixed Git responses or isolated fixture repositories.
  */
 
@@ -60,6 +60,10 @@ export async function readPullSnapshot(
   const fields = raw.split('\0')
   if (fields.pop() !== '' || fields.length % 2 !== 0)
     throw new Error('Incomplete snapshot file list')
+  // A type change is one raw entry but two patch sections (delete, then add),
+  // so it would fail the count check below with a misleading reason.
+  if (fields.some((field, index) => index % 2 === 0 && field.endsWith(' T')))
+    throw new Error('File type changes are not supported')
   const diff = await read([
     ...diffArgs,
     '--patch',
@@ -83,7 +87,7 @@ export async function readPullSnapshot(
   const files = []
   for (let index = 0; index < fields.length; index += 2) {
     const header =
-      /^:(\d{6}) (\d{6}) ([0-9a-f]{40}) ([0-9a-f]{40}) ([AMDT])$/.exec(
+      /^:(\d{6}) (\d{6}) ([0-9a-f]{40}) ([0-9a-f]{40}) ([AMD])$/.exec(
         fields[index] ?? '',
       )
     const path = fields[index + 1]
@@ -119,13 +123,26 @@ export async function readPullSnapshot(
   return { mergeBase, diff, files }
 }
 
+/** A git command exited non-zero. `args` lets a caller tell fetch from diff. */
+export class GitCommandError extends Error {
+  constructor(
+    readonly args: Array<string>,
+    message: string,
+  ) {
+    super(message)
+  }
+}
+
 function gitFailed(
   args: Array<string>,
   result: { stdout: string; stderr: string; code: number },
 ): never {
   const detail = result.stderr.trim() || result.stdout.trim()
   const suffix = detail.length > 0 ? `: ${detail}` : ''
-  throw new Error(`git ${args.join(' ')} exited ${result.code}${suffix}`)
+  throw new GitCommandError(
+    args,
+    `git ${args.join(' ')} exited ${result.code}${suffix}`,
+  )
 }
 
 /** Check and apply a unified patch through stdin. */

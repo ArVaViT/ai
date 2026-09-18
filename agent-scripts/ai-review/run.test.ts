@@ -148,7 +148,10 @@ function createFakeGitHub(
           status: 'completed',
           conclusion: 'success',
           repository: { full_name: REPO },
-          head_repository: { full_name: HEAD_REPO },
+          head_repository: {
+            full_name: HEAD_REPO,
+            owner: { login: HEAD_REPO.split('/')[0] },
+          },
           head_branch: HEAD_REF,
           head_sha: SHA,
         }
@@ -159,7 +162,7 @@ function createFakeGitHub(
         return { id: 7, path: '.github/workflows/ai-review-signal.yml' }
       if (
         method === 'GET' &&
-        path.startsWith(`/repos/${REPO}/commits/${SHA}/pulls?`)
+        path.startsWith(`/repos/${REPO}/pulls?state=open&base=main&head=`)
       )
         return [pull]
 
@@ -207,9 +210,10 @@ function createFakeGitHub(
         }
       }
 
-      const listMatch = /^\/repos\/[^/]+\/[^/]+\/issues\/(\d+)\/comments$/.exec(
-        path,
-      )
+      const listMatch =
+        /^\/repos\/[^/]+\/[^/]+\/issues\/(\d+)\/comments(?:\?per_page=100)?$/.exec(
+          path,
+        )
       const patchMatch =
         /^\/repos\/[^/]+\/[^/]+\/issues\/comments\/(\d+)$/.exec(path)
 
@@ -356,6 +360,9 @@ async function runJob(options: {
   waitingRunIds?: Array<number>
   approveError?: string
   initialIssueLabels?: Array<string>
+  sandboxSecrets?: Array<string>
+  fetchFails?: boolean
+  staleReadAfterPush?: boolean
 }) {
   const pull = options.pull ?? samplePull()
   const github = createFakeGitHub({
@@ -378,7 +385,10 @@ async function runJob(options: {
     machineUserLogin: MACHINE,
     gitRunner: async (args, cwd, input) => {
       const files = options.files ?? sampleFiles()
-      if (args[0] === 'fetch') return { stdout: '', stderr: '', code: 0 }
+      if (args[0] === 'fetch')
+        return options.fetchFails
+          ? { stdout: '', stderr: 'could not resolve host', code: 128 }
+          : { stdout: '', stderr: '', code: 0 }
       if (args[0] === 'merge-base')
         return { stdout: BASE_SHA, stderr: '', code: 0 }
       if (args[0] === 'diff')
@@ -400,13 +410,19 @@ async function runJob(options: {
           code: 0,
         }
       const gitResult = await git.runner(args, cwd, input)
-      if (args[0] === 'push' && gitResult.code === 0) pull.head.sha = POLISH_SHA
+      if (
+        args[0] === 'push' &&
+        gitResult.code === 0 &&
+        !options.staleReadAfterPush
+      )
+        pull.head.sha = POLISH_SHA
       return gitResult
     },
     review: options.review ?? unusedReview,
     prepareWorktree: async () => {},
     alreadyReviewedSha: options.alreadyReviewedSha ?? null,
     headCommitAuthorLogin: options.headCommitAuthorLogin ?? 'alice',
+    sandboxSecrets: options.sandboxSecrets,
   })
   return {
     result,
@@ -446,7 +462,6 @@ describe('runReviewJob', () => {
     const first = await runJob({
       pull,
       review,
-      eventName: 'pull_request_target',
       event: {
         action: 'labeled',
         label: { name: 'ai-review' },
@@ -459,7 +474,6 @@ describe('runReviewJob', () => {
       const replay = await runJob({
         pull,
         review,
-        eventName: 'pull_request_target',
         event: {
           action: 'labeled',
           label: { name: label },
@@ -504,29 +518,30 @@ describe('runReviewJob', () => {
   it.each(['input', 'generated', 'verdict'])(
     'removes stale security labels when the %s audit fails',
     async (stage) => {
-      const { result, issueLabels, approvedRuns, gitCalls } = await runJob({
-        initialIssueLabels: ['secure', 'ai-ready', 'bug', 'ready-to-merge'],
-        waitingRunIds: [101],
-        files:
-          stage === 'input'
-            ? [
-                {
-                  filename: '.github/workflows/ci.yml',
-                  status: 'modified',
-                  patch: '@@ -1 +1 @@\n-old\n+new\n',
-                },
-              ]
-            : sampleFiles(),
-        review:
-          stage === 'input'
-            ? unusedReview
-            : stage === 'generated'
-              ? unsafePolishReview
-              : async () => ({
-                  ...(await readyReview()),
-                  generatedDiff: GENERATED_DIFF,
-                }),
-      })
+      const { result, issueLabels, approvedRuns, gitCalls, comments } =
+        await runJob({
+          initialIssueLabels: ['secure', 'ai-ready', 'bug', 'ready-to-merge'],
+          waitingRunIds: [101],
+          files:
+            stage === 'input'
+              ? [
+                  {
+                    filename: '.github/workflows/ci.yml',
+                    status: 'modified',
+                    patch: '@@ -1 +1 @@\n-old\n+new\n',
+                  },
+                ]
+              : sampleFiles(),
+          review:
+            stage === 'input'
+              ? unusedReview
+              : stage === 'generated'
+                ? unsafePolishReview
+                : async () => ({
+                    ...(await readyReview()),
+                    generatedDiff: GENERATED_DIFF,
+                  }),
+        })
 
       expect(result).toMatchObject({
         skipped: true,
@@ -535,8 +550,53 @@ describe('runReviewJob', () => {
       expect([...issueLabels].sort()).toEqual(['bug', 'ready-to-merge'])
       expect(approvedRuns).toEqual([])
       expect(gitCalls).toEqual([])
+      // The block shows on the PR, and its head SHA stops a paid repeat.
+      expect(comments).toHaveLength(1)
+      expect(comments[0]?.body).toContain('The security check blocked')
+      expect(comments[0]?.body).toContain(`**Head SHA:** ${SHA}`)
     },
   )
+
+  it.each(['diff', 'verdict'])(
+    'blocks a sandbox secret in the generated %s',
+    async (where) => {
+      const secret = 'xai-test-secret'
+      const { result, comments, gitCalls } = await runJob({
+        pull: samplePull({ maintainer_can_modify: true }),
+        sandboxSecrets: [secret],
+        review: async () =>
+          where === 'diff'
+            ? {
+                ...(await polishReview()),
+                generatedDiff: GENERATED_DIFF.replace('+', `+${secret}`),
+              }
+            : {
+                verdict: 'ready' as const,
+                issues: [{ ...NIT, description: `key is ${secret}` }],
+              },
+      })
+      expect(result).toMatchObject({
+        skipped: true,
+        reason: 'security-blocked',
+      })
+      expect(gitCalls).toEqual([])
+      expect(JSON.stringify(comments)).not.toContain(secret)
+    },
+  )
+
+  it('fails the job when the snapshot fetch fails', async () => {
+    await expect(runJob({ fetchFails: true })).rejects.toThrow(/git fetch/)
+  })
+
+  it('still comments when GitHub reports the old head after the polish push', async () => {
+    const { result, comments } = await runJob({
+      pull: samplePull({ maintainer_can_modify: true }),
+      review: polishReview,
+      staleReadAfterPush: true,
+    })
+    expect(result).toMatchObject({ skipped: false, pushLanded: true })
+    expect(comments[0]?.body).toContain(`**Head SHA:** ${POLISH_SHA}`)
+  })
 
   it('does not publish readiness for a head changed during review', async () => {
     const pull = samplePull()
@@ -612,28 +672,6 @@ describe('runReviewJob', () => {
 
   it('runs when the ai-review label is added to a maintainer PR', async () => {
     const { result, comments } = await runJob({
-      pull: samplePull({ login: 'alem' }),
-      event: {
-        action: 'labeled',
-        label: { name: 'ai-review' },
-        sender: { login: 'alem' },
-        pull_request: samplePull(),
-      },
-      review: readyReview,
-    })
-
-    expect(result).toEqual({
-      skipped: false,
-      verdict: { verdict: 'ready', issues: [] },
-      label: 'ai-ready',
-      pushLanded: false,
-    })
-    expect(comments).toHaveLength(1)
-  })
-
-  it('runs when the ai-review label is added via pull_request_target', async () => {
-    const { result, comments } = await runJob({
-      eventName: 'pull_request_target',
       pull: samplePull({ login: 'alem' }),
       event: {
         action: 'labeled',
@@ -898,7 +936,7 @@ describe('runReviewJob', () => {
         reasons: ['.github/workflows/ci.yml: changes a workflow'],
       },
     })
-    expect(comments).toEqual([])
+    expect(comments[0]?.body).toContain('The security check blocked')
     expect([...issueLabels]).toEqual([])
     expect(gitCalls).toEqual([])
   })
@@ -980,7 +1018,7 @@ describe('runReviewJob', () => {
     })
     expect([...issueLabels]).toEqual([])
     expect(approvedRuns).toEqual([])
-    expect(comments).toEqual([])
+    expect(comments[0]?.body).toContain('The security check blocked')
   })
 
   it('skips a labeled ai-review event from a non-maintainer', async () => {

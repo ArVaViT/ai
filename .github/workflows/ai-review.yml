@@ -1,12 +1,16 @@
 name: AI review
 
 # The reviewer runs trusted main code. Signal metadata identifies the PR.
-# A maintainer can request one review with the ai-review label.
+# A maintainer can request one review with /ai-review or workflow_dispatch.
+#
+# Every trigger here runs in the default-branch cache scope, and the agent
+# reads text a fork controls. Never add pull_request_target, a cache step,
+# or id-token: write to this workflow. Never run the agent outside Docker.
+# See https://tanstack.com/blog/npm-supply-chain-compromise-postmortem
 
-on: # zizmor: ignore[dangerous-triggers] This job uses no artifacts or PR code.
-  pull_request_target:
-    branches: [main]
-    types: [labeled]
+# The host checks out and builds main only and never runs PR files. PR code
+# runs only in the Docker sandbox, which gets XAI_API_KEY and no GitHub token.
+on: # zizmor: ignore[dangerous-triggers] The host uses no artifacts and runs no PR files.
   workflow_run:
     workflows: ['AI review signal']
     types: [completed]
@@ -24,30 +28,28 @@ permissions: {}
 jobs:
   review:
     name: Review
+    # Keep the login list in sync with .github/maintainers.json.
     if: >
-      (github.event_name == 'workflow_run'
-        && github.event.workflow_run.conclusion == 'success')
-      || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
-      || (github.event_name == 'pull_request_target'
-        && github.event.action == 'labeled'
-        && github.event.label.name == 'ai-review'
-        && contains(fromJSON('["tombeckenham","AlemTuzlak","jherr"]'), github.event.sender.login))
-      || (github.event_name == 'issue_comment'
-        && github.event.issue.pull_request
-        && startsWith(github.event.comment.body, '/ai-review')
-        && contains(fromJSON('["tombeckenham","AlemTuzlak","jherr"]'), github.event.comment.user.login))
+      github.repository_owner == 'TanStack'
+      && ((github.event_name == 'workflow_run'
+          && github.event.workflow_run.conclusion == 'success')
+        || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+        || (github.event_name == 'issue_comment'
+          && github.event.issue.pull_request
+          && startsWith(github.event.comment.body, '/ai-review')
+          && contains(fromJSON('["tombeckenham","AlemTuzlak","jherr"]'), github.event.comment.user.login)))
     concurrency:
-      group: ai-review-${{ (github.event_name == 'workflow_run' || github.event_name == 'pull_request_target') && 'source' || 'pr' }}-${{ github.event.workflow_run.head_repository.id || github.event.pull_request.head.repo.id || github.repository_id }}-${{ github.event.workflow_run.head_branch || github.event.pull_request.head.ref || github.event.issue.number || github.event.inputs.pr_number }}
+      group: ai-review-${{ github.event_name == 'workflow_run' && 'source' || 'pr' }}-${{ github.event.workflow_run.head_repository.id || github.repository_id }}-${{ github.event.workflow_run.head_branch || github.event.issue.number || github.event.inputs.pr_number }}
       cancel-in-progress: true
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
       contents: read
     steps:
-      # Checkout is always the trusted base (workflow_run checks out the
-      # default branch; issue_comment and workflow_dispatch do too).
-      # Never build or run the PR head. The review script fetches the audited SHA
-      # into .pr-head only when it has a validated patch to apply.
+      # `ref: main` pins the checkout to trusted code for every trigger.
+      # Never build or run the PR head on the host. The script fetches the base
+      # and head commits as objects (no checkout). It creates the .pr-head
+      # worktree only for a polish patch that passed the host scan.
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -66,18 +68,19 @@ jobs:
           GH_TOKEN: ${{ secrets.AI_REVIEW_TOKEN }}
         shell: bash
         run: |
-          skip() {
-            echo "AI review skipped: $1"
-            echo "proceed=false" >> "${GITHUB_OUTPUT}"
-            exit 0
+          # Every trigger here runs in TanStack with secrets, so a missing
+          # secret is a broken setup. Fail red, or fork PRs go unreviewed.
+          fail() {
+            echo "::error::AI review cannot run: $1"
+            exit 1
           }
           if [ -z "${AI_REVIEW_TOKEN}" ] || [ -z "${XAI_API_KEY}" ]; then
-            skip "missing AI_REVIEW_TOKEN or XAI_API_KEY"
+            fail "missing AI_REVIEW_TOKEN or XAI_API_KEY"
           fi
           MACHINE="$(gh api user --jq .login)"
           LOGIN_PATTERN='^[A-Za-z0-9]([A-Za-z0-9-]{0,37}[A-Za-z0-9])?$'
           if ! [[ "${MACHINE}" =~ ${LOGIN_PATTERN} ]]; then
-            skip "invalid GitHub login"
+            fail "invalid GitHub login"
           fi
           echo "machine_user=${MACHINE}" >> "${GITHUB_OUTPUT}"
           echo "proceed=true" >> "${GITHUB_OUTPUT}"

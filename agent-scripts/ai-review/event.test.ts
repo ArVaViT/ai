@@ -8,7 +8,8 @@ function workflowFixture(
     duplicate?: boolean
     stale?: boolean
     wrongWorkflow?: boolean
-    secondPage?: boolean
+    failedSignal?: boolean
+    wrongEvent?: boolean
     noCandidate?: boolean
     wrongRepo?: boolean
     wrongBranch?: boolean
@@ -43,27 +44,21 @@ function workflowFixture(
         return {
           id: 123,
           workflow_id: options.wrongWorkflow ? 8 : 7,
-          event: 'pull_request',
+          event: options.wrongEvent ? 'push' : 'pull_request',
           status: 'completed',
-          conclusion: 'success',
+          conclusion: options.failedSignal ? 'failure' : 'success',
           repository: {
             full_name: options.wrongRepo ? 'other/ai' : 'TanStack/ai',
           },
-          head_repository: { full_name: 'alice/ai' },
+          head_repository: { full_name: 'alice/ai', owner: { login: 'alice' } },
           head_branch: options.wrongBranch ? 'other-branch' : 'feature',
           head_sha: sha,
         }
       if (path.endsWith('/actions/workflows/ai-review-signal.yml'))
         return { id: 7, path: '.github/workflows/ai-review-signal.yml' }
-      if (path.includes('/commits/')) {
+      if (path.includes('/pulls?')) {
         pages.push(path)
         if (options.noCandidate) return []
-        if (options.secondPage && path.endsWith('page=1'))
-          return Array.from({ length: 100 }, (_, index) => ({
-            ...pull,
-            number: index + 100,
-            state: 'closed',
-          }))
         return options.duplicate ? [pull, { ...pull, number: 43 }] : [pull]
       }
       if (path.endsWith('/pulls/42'))
@@ -77,8 +72,10 @@ function workflowFixture(
 }
 
 describe('resolveReviewEvent', () => {
-  it('resolves a fork with no event PR list and reads all candidate pages', async () => {
-    const { client, pages } = workflowFixture({ secondPage: true })
+  // The base repo's /commits/{sha}/pulls returns [] for a fork head on the live
+  // API. The fixture throws on that route, so this pins the head-filter lookup.
+  it('resolves a fork with no event PR list through the head filter', async () => {
+    const { client, pages } = workflowFixture()
     const result = await resolveReviewEvent({
       client,
       repo: 'TanStack/ai',
@@ -92,18 +89,25 @@ describe('resolveReviewEvent', () => {
       eventName: 'workflow_run',
     })
     expect(result.pr.headRepo).toBe('alice/ai')
-    expect(pages).toHaveLength(2)
+    expect(pages).toEqual([
+      '/repos/TanStack/ai/pulls?state=open&base=main&head=alice%3Afeature&per_page=100',
+    ])
   })
 
+  const untrusted = 'workflow_run does not match the trusted signal workflow'
+  const notUnique = 'workflow_run has no unique current pull request'
   it.each([
-    { duplicate: true },
-    { stale: true },
-    { wrongWorkflow: true },
-    { noCandidate: true },
-    { wrongRepo: true },
-    { wrongBranch: true },
+    { duplicate: true, message: notUnique },
+    { stale: true, message: 'workflow_run pull request changed' },
+    { wrongWorkflow: true, message: untrusted },
+    { failedSignal: true, message: untrusted },
+    { wrongEvent: true, message: untrusted },
+    { noCandidate: true, message: notUnique },
+    { wrongRepo: true, message: untrusted },
+    { wrongBranch: true, message: notUnique },
   ])('rejects ambiguous, stale, or unrelated runs', async (options) => {
-    const { client } = workflowFixture(options)
+    const { message, ...fixture } = options
+    const { client } = workflowFixture(fixture)
     await expect(
       resolveReviewEvent({
         client,
@@ -111,7 +115,7 @@ describe('resolveReviewEvent', () => {
         eventName: 'workflow_run',
         event: { workflow_run: { id: 123, pull_requests: [{ number: 99 }] } },
       }),
-    ).rejects.toThrow(/workflow_run/)
+    ).rejects.toThrow(message)
   })
 
   it('keeps status labels out of the signal and concurrency behind the review guard', async () => {
@@ -127,7 +131,10 @@ describe('resolveReviewEvent', () => {
     expect(signal).not.toContain('labeled')
     expect(review).not.toMatch(/^concurrency:/m)
     expect(review).toContain('    concurrency:')
-    expect(review).toContain("github.event.label.name == 'ai-review'")
+    expect(review).not.toMatch(/^\s*pull_request_target:/m)
+    expect(review).not.toMatch(/^\s*id-token:/m)
+    expect(review).not.toMatch(/uses:\s*actions\/cache/)
+    expect(review).toContain("github.repository_owner == 'TanStack'")
     expect(review).toContain("github.ref == 'refs/heads/main'")
     expect(review).toContain('          ref: main')
     expect(review).toContain('          persist-credentials: false')
@@ -168,38 +175,6 @@ describe('parseReviewEvent', () => {
     })
   })
 
-  it('parses a pull_request_target labeled ai-review as manual', () => {
-    expect(
-      parseReviewEvent({
-        eventName: 'pull_request_target',
-        event: {
-          action: 'labeled',
-          label: { name: 'ai-review' },
-          sender: { login: 'alem' },
-          pull_request: { number: 42 },
-        },
-      }),
-    ).toEqual({
-      prNumber: 42,
-      mode: 'manual',
-      commentAuthor: 'alem',
-      eventName: 'pull_request_target',
-    })
-  })
-
-  it('parses a plain pull_request_target as auto', () => {
-    expect(
-      parseReviewEvent({
-        eventName: 'pull_request_target',
-        event: { pull_request: { number: 42 } },
-      }),
-    ).toEqual({
-      prNumber: 42,
-      mode: 'auto',
-      commentAuthor: null,
-      eventName: 'pull_request_target',
-    })
-  })
   it('parses a pull_request labeled with another name as auto', () => {
     expect(
       parseReviewEvent({

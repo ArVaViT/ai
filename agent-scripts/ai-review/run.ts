@@ -1,5 +1,7 @@
 /**
- * Orchestrate one AI review job: skip, review, optional polish push, comment, label.
+ * Orchestrate one AI review job: authorize the trigger, resolve the PR, clear
+ * stale labels, audit the snapshot, skip check, review, validate the generated
+ * diff, optional polish push, recheck identity, approve workflows, label, comment.
  */
 
 import { spawn } from 'node:child_process'
@@ -29,6 +31,7 @@ import { createGitHubClient } from '../../scripts/maintainer/github.ts'
 import type { GitHubClient } from '../../scripts/maintainer/github.ts'
 import type { ToolsetConfig } from '../../scripts/maintainer/types.ts'
 import {
+  buildBlockedComment,
   buildReviewComment,
   isBotReviewComment,
   upsertReviewComment,
@@ -41,6 +44,7 @@ import {
 } from './event.ts'
 import { createReviewStreamLogger } from './log.ts'
 import {
+  GitCommandError,
   applyPatch,
   commitAll,
   headRemoteUrl,
@@ -131,7 +135,7 @@ async function fetchAlreadyReviewedSha(
 ) {
   const list = await client.rest(
     'GET',
-    `/repos/${repo}/issues/${issueNumber}/comments`,
+    `/repos/${repo}/issues/${issueNumber}/comments?per_page=100`,
   )
   if (!Array.isArray(list)) return null
   const comments = []
@@ -291,16 +295,13 @@ export async function runReviewJob(opts: {
   }) => Promise<void>
   alreadyReviewedSha?: string | null
   headCommitAuthorLogin?: string | null
+  /** Values the sandbox could read. Defaults to `XAI_API_KEY`. */
+  sandboxSecrets?: Array<string>
 }) {
   const intent =
     opts.eventName === 'workflow_run'
       ? null
       : parseReviewEvent({ eventName: opts.eventName, event: opts.event })
-  if (
-    opts.eventName === 'pull_request_target' &&
-    !isAiReviewLabelEvent(opts.event)
-  )
-    return { skipped: true as const, reason: 'not-label' }
 
   if (opts.eventName === 'issue_comment') {
     if (firstToken(readIssueCommentBody(opts.event)) !== '/ai-review') {
@@ -312,8 +313,7 @@ export async function runReviewJob(opts: {
   }
 
   if (
-    (opts.eventName === 'pull_request' ||
-      opts.eventName === 'pull_request_target') &&
+    opts.eventName === 'pull_request' &&
     isPullRequestLabeledEvent(opts.event) &&
     !isAiReviewLabelEvent(opts.event)
   ) {
@@ -389,27 +389,38 @@ export async function runReviewJob(opts: {
   ) {
     return { skipped: true as const, reason: 'not-main' }
   }
+  // A block must show on the PR. workflow_run jobs are not PR checks, so a
+  // silent skip looks the same as a review that never ran. The head SHA in the
+  // comment also stops a paid repeat of the same blocked commit.
+  async function blocked(reasons: Array<string>) {
+    if (!skip.skip) {
+      await upsertReviewComment(
+        opts.client,
+        opts.repo,
+        pr.number,
+        buildBlockedComment({ headSha: pr.headSha, reasons }),
+        opts.machineUserLogin,
+      )
+    }
+    return {
+      skipped: true as const,
+      reason: 'security-blocked',
+      security: { ok: false as const, reasons },
+    }
+  }
   let snapshot
   try {
     snapshot = await readPullSnapshot(opts.repoRoot, pr, opts.gitRunner)
   } catch (error) {
-    return {
-      skipped: true as const,
-      reason: 'security-blocked',
-      security: {
-        ok: false,
-        reasons: [error instanceof Error ? error.message : String(error)],
-      },
-    }
+    // A failed fetch is a broken runner or token, not a verdict on the PR.
+    if (error instanceof GitCommandError && error.args[0] === 'fetch')
+      throw error
+    return await blocked([
+      error instanceof Error ? error.message : String(error),
+    ])
   }
   const security = auditPullSecurity(snapshot)
-  if (!security.ok) {
-    return {
-      skipped: true as const,
-      reason: 'security-blocked',
-      security,
-    }
-  }
+  if (!security.ok) return await blocked(security.reasons)
   if (skip.skip) {
     return { skipped: true as const, reason: skip.reason }
   }
@@ -421,25 +432,20 @@ export async function runReviewJob(opts: {
   })
   const verdict = parseVerdict(review)
   const generatedDiff = review.generatedDiff ?? ''
-  const generatedSecurity = scanGeneratedDiff(generatedDiff, [
-    process.env.XAI_API_KEY ?? '',
-  ])
-  if (!generatedSecurity.ok) {
-    return {
-      skipped: true as const,
-      reason: 'security-blocked',
-      security: generatedSecurity,
-    }
-  }
+  const sandboxSecrets = opts.sandboxSecrets ?? [process.env.XAI_API_KEY ?? '']
+  const generatedSecurity = scanGeneratedDiff(generatedDiff, sandboxSecrets)
+  if (!generatedSecurity.ok) return await blocked(generatedSecurity.reasons)
   if (generatedDiff.length > 0 && verdict.verdict !== 'polish') {
-    return {
-      skipped: true as const,
-      reason: 'security-blocked',
-      security: {
-        ok: false as const,
-        reasons: ['generated diff requires a polish verdict'],
-      },
-    }
+    return await blocked(['generated diff requires a polish verdict'])
+  }
+  // The verdict text goes into a public comment. The sandbox can read the key.
+  const verdictText = JSON.stringify(verdict)
+  if (
+    sandboxSecrets.some(
+      (secret) => secret.length > 0 && verdictText.includes(secret),
+    )
+  ) {
+    return await blocked(['review text contains a sandbox secret'])
   }
 
   let pushLanded = false
@@ -510,7 +516,11 @@ export async function runReviewJob(opts: {
   }
 
   const currentPr = await fetchPullRequest(opts.client, opts.repo, pr.number)
-  if (!matchesPullIdentity(pr, currentPr, reviewedSha)) {
+  // GitHub can still report the old head just after our push. Accept that
+  // read, or the polish commit lands with no comment and no label.
+  const staleReadAfterPush =
+    pushLanded && matchesPullIdentity(pr, currentPr, pr.headSha)
+  if (!matchesPullIdentity(pr, currentPr, reviewedSha) && !staleReadAfterPush) {
     return { skipped: true as const, reason: 'head-changed' }
   }
   const label = reviewLabelFor(verdict.verdict, pushLanded)
@@ -547,7 +557,6 @@ export async function runReviewJob(opts: {
     label,
     securityNote: securityNoteFor({
       markSecure,
-      reasons: security.reasons,
       approvedRuns,
       approveError,
     }),
@@ -564,13 +573,9 @@ export async function runReviewJob(opts: {
 
 function securityNoteFor(input: {
   markSecure: boolean
-  reasons: Array<string>
   approvedRuns: number
   approveError: string | null
 }) {
-  if (input.reasons.length > 0) {
-    return `blocked. Did not approve workflows.\n${input.reasons.map((reason) => `- ${reason}`).join('\n')}`
-  }
   if (input.approveError !== null) {
     return `clean. Did not add label \`secure\`. Could not approve workflows: ${input.approveError}`
   }
@@ -628,8 +633,8 @@ async function resolveReviewToken() {
   if (fromEnv !== undefined && fromEnv.length > 0) return fromEnv
   try {
     return await resolveToken()
-  } catch {
-    throw new Error('missing AI_REVIEW_TOKEN or XAI_API_KEY')
+  } catch (error) {
+    throw new Error('missing AI_REVIEW_TOKEN', { cause: error })
   }
 }
 

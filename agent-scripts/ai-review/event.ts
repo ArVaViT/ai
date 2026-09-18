@@ -3,7 +3,10 @@ import { fetchPullRequest } from './pr.ts'
 
 export const AI_REVIEW_TRIGGER_LABEL = 'ai-review'
 
-/** Resolve a completed signal through authenticated GitHub metadata. */
+/**
+ * Resolve any trigger to `{ parsed, pr }`. A `workflow_run` is resolved through
+ * authenticated run and pull request metadata, never the event payload.
+ */
 export async function resolveReviewEvent(input: {
   eventName: string
   event: unknown
@@ -13,27 +16,6 @@ export async function resolveReviewEvent(input: {
   if (input.eventName !== 'workflow_run') {
     const parsed = parseReviewEvent(input)
     const pr = await fetchPullRequest(input.client, input.repo, parsed.prNumber)
-    if (input.eventName === 'pull_request_target') {
-      const eventPr = isRecord(input.event)
-        ? input.event.pull_request
-        : undefined
-      const head = isRecord(eventPr) ? eventPr.head : undefined
-      const base = isRecord(eventPr) ? eventPr.base : undefined
-      if (
-        !isRecord(head) ||
-        !isRecord(base) ||
-        !isRecord(head.repo) ||
-        !isRecord(base.repo) ||
-        head.sha !== pr.headSha ||
-        head.ref !== pr.headRef ||
-        head.repo.full_name !== pr.headRepo ||
-        base.sha !== pr.baseSha ||
-        base.ref !== pr.baseRef ||
-        base.repo.full_name !== pr.baseRepo
-      ) {
-        throw new Error('Label event no longer matches the pull request')
-      }
-    }
     return { parsed, pr }
   }
   const eventRun = isRecord(input.event) ? input.event.workflow_run : undefined
@@ -61,42 +43,46 @@ export async function resolveReviewEvent(input: {
     run.repository.full_name !== input.repo ||
     !isRecord(run.head_repository) ||
     typeof run.head_repository.full_name !== 'string' ||
+    !isRecord(run.head_repository.owner) ||
+    typeof run.head_repository.owner.login !== 'string' ||
     typeof run.head_branch !== 'string' ||
     typeof run.head_sha !== 'string' ||
     !/^[0-9a-f]{40}$/i.test(run.head_sha)
   ) {
     throw new Error('workflow_run does not match the trusted signal workflow')
   }
+  // The base repo's /commits/{sha}/pulls returns [] for a fork head, so list
+  // by head instead. One head branch has at most one open PR into main.
+  const head = encodeURIComponent(
+    `${run.head_repository.owner.login}:${run.head_branch}`,
+  )
+  const batch = await input.client.rest(
+    'GET',
+    `/repos/${input.repo}/pulls?state=open&base=main&head=${head}&per_page=100`,
+  )
+  if (!Array.isArray(batch))
+    throw new Error('Invalid workflow_run pull request list')
   const candidates = new Set<number>()
-  for (let page = 1; ; page++) {
-    const batch = await input.client.rest(
-      'GET',
-      `/repos/${input.repo}/commits/${run.head_sha}/pulls?per_page=100&page=${page}`,
+  for (const candidate of batch) {
+    if (
+      !isRecord(candidate) ||
+      !isRecord(candidate.head) ||
+      !isRecord(candidate.base) ||
+      !isRecord(candidate.head.repo) ||
+      !isRecord(candidate.base.repo)
     )
-    if (!Array.isArray(batch))
-      throw new Error('Invalid workflow_run pull request list')
-    for (const candidate of batch) {
-      if (
-        !isRecord(candidate) ||
-        !isRecord(candidate.head) ||
-        !isRecord(candidate.base) ||
-        !isRecord(candidate.head.repo) ||
-        !isRecord(candidate.base.repo)
-      )
-        throw new Error('Malformed workflow_run pull request')
-      const number = parsePrNumber(candidate.number)
-      if (
-        number !== null &&
-        candidate.state === 'open' &&
-        candidate.base.ref === 'main' &&
-        candidate.base.repo.full_name === input.repo &&
-        candidate.head.sha === run.head_sha &&
-        candidate.head.ref === run.head_branch &&
-        candidate.head.repo.full_name === run.head_repository.full_name
-      )
-        candidates.add(number)
-    }
-    if (batch.length < 100) break
+      throw new Error('Malformed workflow_run pull request')
+    const number = parsePrNumber(candidate.number)
+    if (
+      number !== null &&
+      candidate.state === 'open' &&
+      candidate.base.ref === 'main' &&
+      candidate.base.repo.full_name === input.repo &&
+      candidate.head.sha === run.head_sha &&
+      candidate.head.ref === run.head_branch &&
+      candidate.head.repo.full_name === run.head_repository.full_name
+    )
+      candidates.add(number)
   }
   if (candidates.size !== 1)
     throw new Error('workflow_run has no unique current pull request')
@@ -130,7 +116,6 @@ export type ReviewEvent = {
   commentAuthor: string | null
   eventName:
     | 'pull_request'
-    | 'pull_request_target'
     | 'workflow_run'
     | 'workflow_dispatch'
     | 'issue_comment'
@@ -182,7 +167,7 @@ function readEventLabelName(event: unknown) {
   return isRecord(label) && typeof label.name === 'string' ? label.name : null
 }
 
-/** True when this `pull_request` or `pull_request_target` event is someone adding the `ai-review` label. */
+/** True when this `pull_request` event is someone adding the `ai-review` label. */
 export function isAiReviewLabelEvent(event: unknown) {
   return (
     readAction(event) === 'labeled' &&
@@ -190,7 +175,7 @@ export function isAiReviewLabelEvent(event: unknown) {
   )
 }
 
-/** True when this `pull_request` or `pull_request_target` event is any label add. */
+/** True when this `pull_request` event is any label add. */
 export function isPullRequestLabeledEvent(event: unknown) {
   return readAction(event) === 'labeled'
 }
@@ -198,16 +183,15 @@ export function isPullRequestLabeledEvent(event: unknown) {
 /**
  * Parse a GitHub Actions event into the PR number and auto vs manual mode.
  *
- * A `pull_request` or `pull_request_target` `labeled` event with the `ai-review` label is manual.
- * `workflow_run` needs authenticated resolution and is always automatic.
- * Throws if `eventName` is unknown, `workflow_run` has no PR,
+ * No workflow sends `pull_request` now. It stays for local runs.
+ * Always throws for `workflow_run`. Use `resolveReviewEvent`.
+ * Also throws if `eventName` is unknown, `pull_request.number` is missing,
  * `workflow_dispatch` has no valid `inputs.pr_number`, or `issue_comment`
  * is not on a pull request.
  */
 export function parseReviewEvent(input: { eventName: string; event: unknown }) {
   switch (input.eventName) {
-    case 'pull_request':
-    case 'pull_request_target': {
+    case 'pull_request': {
       const pullRequest = isRecord(input.event)
         ? input.event.pull_request
         : undefined
@@ -217,17 +201,13 @@ export function parseReviewEvent(input: { eventName: string; event: unknown }) {
       if (prNumber === null) {
         throw new Error('pull_request event is missing pull_request.number')
       }
-      const eventName =
-        input.eventName === 'pull_request_target'
-          ? 'pull_request_target'
-          : 'pull_request'
       return {
         prNumber,
         mode: isAiReviewLabelEvent(input.event) ? 'manual' : 'auto',
         commentAuthor: isAiReviewLabelEvent(input.event)
           ? readSenderLogin(input.event)
           : null,
-        eventName,
+        eventName: 'pull_request',
       } satisfies ReviewEvent
     }
     case 'workflow_run':

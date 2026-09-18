@@ -1,6 +1,9 @@
 /**
- * Host-side malware scan for a PR file list. High-confidence alerts only.
- * A clean scan is required before the bot adds `secure` or approves workflows.
+ * Host-side, fail-closed checks for a PR Git snapshot (`auditPullSecurity`)
+ * and for Grok's generated patch (`scanGeneratedDiff`). They block
+ * malware-shaped content and whole change classes: lockfiles, new
+ * dependencies, sensitive paths, binaries, and executables. A clean audit is
+ * required before Grok starts, and before `secure` or workflow approval.
  */
 
 import type { readPullSnapshot } from './git.ts'

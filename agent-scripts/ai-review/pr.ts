@@ -1,5 +1,6 @@
 /**
- * Load pull request metadata and changed files from GitHub REST.
+ * Load and validate pull request metadata from GitHub REST. Changed files
+ * come from the Git snapshot in `git.ts`.
  */
 
 import type { GitHubClient } from '../../scripts/maintainer/github.ts'

@@ -179,6 +179,16 @@ describe('readPullSnapshot', () => {
     ).toBe(false)
   })
 
+  it('names a file type change instead of reporting an incomplete patch', async () => {
+    const { runner } = snapshotRunner({
+      raw: `:120000 100644 ${OLD_BLOB} ${NEW_BLOB} T\0link.ts\0`,
+      diff: 'diff --git a/link.ts b/link.ts\ndeleted file mode 120000\ndiff --git a/link.ts b/link.ts\nnew file mode 100644\n',
+    })
+    await expect(
+      readPullSnapshot(CWD, { baseSha: BASE, headSha: HEAD }, runner),
+    ).rejects.toThrow('File type changes are not supported')
+  })
+
   it('keeps dotfiles and control characters from NUL-delimited paths', async () => {
     const paths = ['.hidden', 'quote"name.ts', 'line\nname.ts']
     const { runner } = snapshotRunner({ paths })
