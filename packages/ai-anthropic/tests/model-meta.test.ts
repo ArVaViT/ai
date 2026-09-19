@@ -397,7 +397,11 @@ describe('getAnthropicDefaultMaxTokens (#849)', () => {
 })
 
 describe('ANTHROPIC_COMBINED_TOOLS_AND_SCHEMA_MODELS', () => {
-  const MODELS_WITHOUT_OUTPUT_CONFIG = [
+  // The set decides whether the engine sends `output_config.format` with the
+  // tools in one call. It is not the same axis as the `output_config` provider
+  // option, which arrived with Claude 4.7 — Opus 4.5, Opus 4.6, Sonnet 4.5,
+  // Sonnet 4.6 and Haiku 4.5 are in the set and do not accept that option.
+  const MODELS_WITHOUT_COMBINED_OUTPUT = [
     'claude-opus-4-1',
     'claude-opus-5-fast',
   ] as const
@@ -406,8 +410,8 @@ describe('ANTHROPIC_COMBINED_TOOLS_AND_SCHEMA_MODELS', () => {
     const missing = ANTHROPIC_MODELS.filter(
       (model) =>
         !ANTHROPIC_COMBINED_TOOLS_AND_SCHEMA_MODELS.has(model) &&
-        !MODELS_WITHOUT_OUTPUT_CONFIG.includes(
-          model as (typeof MODELS_WITHOUT_OUTPUT_CONFIG)[number],
+        !MODELS_WITHOUT_COMBINED_OUTPUT.includes(
+          model as (typeof MODELS_WITHOUT_COMBINED_OUTPUT)[number],
         ),
     )
 
@@ -415,7 +419,7 @@ describe('ANTHROPIC_COMBINED_TOOLS_AND_SCHEMA_MODELS', () => {
   })
 
   it('leaves out the models that fall back to forced tool use', () => {
-    for (const model of MODELS_WITHOUT_OUTPUT_CONFIG) {
+    for (const model of MODELS_WITHOUT_COMBINED_OUTPUT) {
       expect(ANTHROPIC_COMBINED_TOOLS_AND_SCHEMA_MODELS.has(model)).toBe(false)
     }
   })

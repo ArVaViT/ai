@@ -1,4 +1,5 @@
 import { test, expect } from './fixtures'
+import type { APIRequestContext } from '@playwright/test'
 
 /**
  * Wire-format verification for `claude-opus-5` structured output with tools.
@@ -27,12 +28,7 @@ type WireResponse = {
  * POSTs the wire route once and returns its captured requests. Each test
  * drives its own run so the three assertions stay independent.
  */
-async function runRoute(request: {
-  post: (url: string) => Promise<{
-    ok: () => boolean
-    json: () => Promise<unknown>
-  }>
-}): Promise<WireResponse> {
+async function runRoute(request: APIRequestContext): Promise<WireResponse> {
   const res = await request.post('/api/anthropic-opus-5-combined-wire')
   expect(res.ok()).toBe(true)
   const payload = (await res.json()) as WireResponse
@@ -67,16 +63,21 @@ test.describe('anthropic — claude-opus-5 tools + schema wire format', () => {
     expect(outputConfig?.format?.schema).toMatchObject({ type: 'object' })
   })
 
-  test('the same request carries the web_search server tool', async ({
+  test('the web_search tool rides along and no structured_output tool appears', async ({
     request,
   }) => {
     const { capturedRequests } = await runRoute(request)
-    const body = capturedRequests[0]?.body
-    const tools = (body?.['tools'] ?? []) as Array<Record<string, unknown>>
+    const toolNames = (body: Record<string, unknown> | null): Array<unknown> =>
+      ((body?.['tools'] ?? []) as Array<Record<string, unknown>>).map(
+        (tool) => tool['name'],
+      )
 
-    expect(tools.map((tool) => tool['name'])).toContain('web_search')
-    // The fallback path would have sent a `structured_output` function tool
-    // instead of a schema.
-    expect(tools.map((tool) => tool['name'])).not.toContain('structured_output')
+    // The schema and the provider tool travel in the same request.
+    expect(toolNames(capturedRequests[0]?.body ?? null)).toContain('web_search')
+    // The fallback path asks for the JSON through a forced `structured_output`
+    // tool in a follow-up call. Nothing in this run may carry it.
+    expect(
+      capturedRequests.flatMap((captured) => toolNames(captured.body)),
+    ).not.toContain('structured_output')
   })
 })
