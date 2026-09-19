@@ -91,6 +91,10 @@ export const Route = createFileRoute('/api/anthropic-opus-5-combined-wire')({
           body: Record<string, unknown> | null
         }> = []
 
+        /**
+         * Records the outgoing request and answers with the synthetic stream,
+         * so nothing leaves the process.
+         */
         const capturingFetch: typeof fetch = async (input, init) => {
           const req =
             input instanceof Request ? input : new Request(input, init)

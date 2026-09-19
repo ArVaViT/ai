@@ -23,6 +23,10 @@ type WireResponse = {
   }>
 }
 
+/**
+ * POSTs the wire route once and returns its captured requests. Each test
+ * drives its own run so the three assertions stay independent.
+ */
 async function runRoute(request: {
   post: (url: string) => Promise<{
     ok: () => boolean
