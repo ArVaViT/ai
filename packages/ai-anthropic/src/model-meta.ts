@@ -536,7 +536,8 @@ const CLAUDE_OPUS_5 = {
     AnthropicStopSequencesOptions &
     AnthropicThinkingOptions &
     AnthropicToolChoiceOptions &
-    AnthropicSamplingOptions
+    AnthropicSamplingOptions &
+    AnthropicOutputConfigOptions
 >
 
 const CLAUDE_OPUS_5_FAST = {
@@ -870,7 +871,8 @@ export type AnthropicChatModelProviderOptionsByName = {
     AnthropicStopSequencesOptions &
     AnthropicThinkingOptions &
     AnthropicToolChoiceOptions &
-    AnthropicSamplingOptions
+    AnthropicSamplingOptions &
+    AnthropicOutputConfigOptions
   [CLAUDE_OPUS_5_FAST.id]: AnthropicContainerOptions &
     AnthropicContextManagementOptions &
     AnthropicMCPOptions &
