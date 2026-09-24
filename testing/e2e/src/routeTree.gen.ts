@@ -14,6 +14,8 @@ import { Route as WebMcpToolsRouteImport } from './routes/web-mcp-tools'
 import { Route as ToolsTestRouteImport } from './routes/tools-test'
 import { Route as ToolFirstTextRouteImport } from './routes/tool-first-text'
 import { Route as TextFirstToolRouteImport } from './routes/text-first-tool'
+import { Route as SubagentsUiTestRouteImport } from './routes/subagents-ui-test'
+import { Route as SubagentsTestRouteImport } from './routes/subagents-test'
 import { Route as PersistenceDurabilityRouteImport } from './routes/persistence-durability'
 import { Route as MiddlewareTestRouteImport } from './routes/middleware-test'
 import { Route as MessageHistoryPagingRouteImport } from './routes/message-history-paging'
@@ -26,6 +28,7 @@ import { Route as GenerationPersistenceServerRouteImport } from './routes/genera
 import { Route as GenerationPersistenceResumeRouteImport } from './routes/generation-persistence-resume'
 import { Route as ForeignInterruptRouteImport } from './routes/foreign-interrupt'
 import { Route as DevtoolsToolsRouteImport } from './routes/devtools-tools'
+import { Route as DevtoolsSubagentsRouteImport } from './routes/devtools-subagents'
 import { Route as DevtoolsStructuredRouteImport } from './routes/devtools-structured'
 import { Route as DevtoolsRouteBRouteImport } from './routes/devtools-route-b'
 import { Route as DevtoolsRouteARouteImport } from './routes/devtools-route-a'
@@ -47,6 +50,7 @@ import { Route as ApiToolFirstTextWireRouteImport } from './routes/api.tool-firs
 import { Route as ApiToolCallLifecycleWireRouteImport } from './routes/api.tool-call-lifecycle-wire'
 import { Route as ApiTextFirstToolWireRouteImport } from './routes/api.text-first-tool-wire'
 import { Route as ApiSummarizeRouteImport } from './routes/api.summarize'
+import { Route as ApiSubagentsTestRouteImport } from './routes/api.subagents-test'
 import { Route as ApiSandboxToolHistoryRouteImport } from './routes/api.sandbox-tool-history'
 import { Route as ApiSandboxFilePersistenceRouteImport } from './routes/api.sandbox-file-persistence'
 import { Route as ApiSandboxDurabilityRouteImport } from './routes/api.sandbox-durability'
@@ -136,6 +140,16 @@ const TextFirstToolRoute = TextFirstToolRouteImport.update({
   path: '/text-first-tool',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SubagentsUiTestRoute = SubagentsUiTestRouteImport.update({
+  id: '/subagents-ui-test',
+  path: '/subagents-ui-test',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SubagentsTestRoute = SubagentsTestRouteImport.update({
+  id: '/subagents-test',
+  path: '/subagents-test',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PersistenceDurabilityRoute = PersistenceDurabilityRouteImport.update({
   id: '/persistence-durability',
   path: '/persistence-durability',
@@ -196,6 +210,11 @@ const ForeignInterruptRoute = ForeignInterruptRouteImport.update({
 const DevtoolsToolsRoute = DevtoolsToolsRouteImport.update({
   id: '/devtools-tools',
   path: '/devtools-tools',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DevtoolsSubagentsRoute = DevtoolsSubagentsRouteImport.update({
+  id: '/devtools-subagents',
+  path: '/devtools-subagents',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DevtoolsStructuredRoute = DevtoolsStructuredRouteImport.update({
@@ -302,6 +321,11 @@ const ApiTextFirstToolWireRoute = ApiTextFirstToolWireRouteImport.update({
 const ApiSummarizeRoute = ApiSummarizeRouteImport.update({
   id: '/api/summarize',
   path: '/api/summarize',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiSubagentsTestRoute = ApiSubagentsTestRouteImport.update({
+  id: '/api/subagents-test',
+  path: '/api/subagents-test',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiSandboxToolHistoryRoute = ApiSandboxToolHistoryRouteImport.update({
@@ -646,6 +670,7 @@ export interface FileRoutesByFullPath {
   '/devtools-route-a': typeof DevtoolsRouteARoute
   '/devtools-route-b': typeof DevtoolsRouteBRoute
   '/devtools-structured': typeof DevtoolsStructuredRoute
+  '/devtools-subagents': typeof DevtoolsSubagentsRoute
   '/devtools-tools': typeof DevtoolsToolsRoute
   '/foreign-interrupt': typeof ForeignInterruptRoute
   '/generation-persistence-resume': typeof GenerationPersistenceResumeRoute
@@ -658,6 +683,8 @@ export interface FileRoutesByFullPath {
   '/message-history-paging': typeof MessageHistoryPagingRoute
   '/middleware-test': typeof MiddlewareTestRoute
   '/persistence-durability': typeof PersistenceDurabilityRoute
+  '/subagents-test': typeof SubagentsTestRoute
+  '/subagents-ui-test': typeof SubagentsUiTestRoute
   '/text-first-tool': typeof TextFirstToolRoute
   '/tool-first-text': typeof ToolFirstTextRoute
   '/tools-test': typeof ToolsTestRoute
@@ -721,6 +748,7 @@ export interface FileRoutesByFullPath {
   '/api/sandbox-durability': typeof ApiSandboxDurabilityRoute
   '/api/sandbox-file-persistence': typeof ApiSandboxFilePersistenceRoute
   '/api/sandbox-tool-history': typeof ApiSandboxToolHistoryRoute
+  '/api/subagents-test': typeof ApiSubagentsTestRoute
   '/api/summarize': typeof ApiSummarizeRoute
   '/api/text-first-tool-wire': typeof ApiTextFirstToolWireRoute
   '/api/tool-call-lifecycle-wire': typeof ApiToolCallLifecycleWireRoute
@@ -749,6 +777,7 @@ export interface FileRoutesByTo {
   '/devtools-route-a': typeof DevtoolsRouteARoute
   '/devtools-route-b': typeof DevtoolsRouteBRoute
   '/devtools-structured': typeof DevtoolsStructuredRoute
+  '/devtools-subagents': typeof DevtoolsSubagentsRoute
   '/devtools-tools': typeof DevtoolsToolsRoute
   '/foreign-interrupt': typeof ForeignInterruptRoute
   '/generation-persistence-resume': typeof GenerationPersistenceResumeRoute
@@ -761,6 +790,8 @@ export interface FileRoutesByTo {
   '/message-history-paging': typeof MessageHistoryPagingRoute
   '/middleware-test': typeof MiddlewareTestRoute
   '/persistence-durability': typeof PersistenceDurabilityRoute
+  '/subagents-test': typeof SubagentsTestRoute
+  '/subagents-ui-test': typeof SubagentsUiTestRoute
   '/text-first-tool': typeof TextFirstToolRoute
   '/tool-first-text': typeof ToolFirstTextRoute
   '/tools-test': typeof ToolsTestRoute
@@ -824,6 +855,7 @@ export interface FileRoutesByTo {
   '/api/sandbox-durability': typeof ApiSandboxDurabilityRoute
   '/api/sandbox-file-persistence': typeof ApiSandboxFilePersistenceRoute
   '/api/sandbox-tool-history': typeof ApiSandboxToolHistoryRoute
+  '/api/subagents-test': typeof ApiSubagentsTestRoute
   '/api/summarize': typeof ApiSummarizeRoute
   '/api/text-first-tool-wire': typeof ApiTextFirstToolWireRoute
   '/api/tool-call-lifecycle-wire': typeof ApiToolCallLifecycleWireRoute
@@ -853,6 +885,7 @@ export interface FileRoutesById {
   '/devtools-route-a': typeof DevtoolsRouteARoute
   '/devtools-route-b': typeof DevtoolsRouteBRoute
   '/devtools-structured': typeof DevtoolsStructuredRoute
+  '/devtools-subagents': typeof DevtoolsSubagentsRoute
   '/devtools-tools': typeof DevtoolsToolsRoute
   '/foreign-interrupt': typeof ForeignInterruptRoute
   '/generation-persistence-resume': typeof GenerationPersistenceResumeRoute
@@ -865,6 +898,8 @@ export interface FileRoutesById {
   '/message-history-paging': typeof MessageHistoryPagingRoute
   '/middleware-test': typeof MiddlewareTestRoute
   '/persistence-durability': typeof PersistenceDurabilityRoute
+  '/subagents-test': typeof SubagentsTestRoute
+  '/subagents-ui-test': typeof SubagentsUiTestRoute
   '/text-first-tool': typeof TextFirstToolRoute
   '/tool-first-text': typeof ToolFirstTextRoute
   '/tools-test': typeof ToolsTestRoute
@@ -928,6 +963,7 @@ export interface FileRoutesById {
   '/api/sandbox-durability': typeof ApiSandboxDurabilityRoute
   '/api/sandbox-file-persistence': typeof ApiSandboxFilePersistenceRoute
   '/api/sandbox-tool-history': typeof ApiSandboxToolHistoryRoute
+  '/api/subagents-test': typeof ApiSubagentsTestRoute
   '/api/summarize': typeof ApiSummarizeRoute
   '/api/text-first-tool-wire': typeof ApiTextFirstToolWireRoute
   '/api/tool-call-lifecycle-wire': typeof ApiToolCallLifecycleWireRoute
@@ -958,6 +994,7 @@ export interface FileRouteTypes {
     | '/devtools-route-a'
     | '/devtools-route-b'
     | '/devtools-structured'
+    | '/devtools-subagents'
     | '/devtools-tools'
     | '/foreign-interrupt'
     | '/generation-persistence-resume'
@@ -970,6 +1007,8 @@ export interface FileRouteTypes {
     | '/message-history-paging'
     | '/middleware-test'
     | '/persistence-durability'
+    | '/subagents-test'
+    | '/subagents-ui-test'
     | '/text-first-tool'
     | '/tool-first-text'
     | '/tools-test'
@@ -1033,6 +1072,7 @@ export interface FileRouteTypes {
     | '/api/sandbox-durability'
     | '/api/sandbox-file-persistence'
     | '/api/sandbox-tool-history'
+    | '/api/subagents-test'
     | '/api/summarize'
     | '/api/text-first-tool-wire'
     | '/api/tool-call-lifecycle-wire'
@@ -1061,6 +1101,7 @@ export interface FileRouteTypes {
     | '/devtools-route-a'
     | '/devtools-route-b'
     | '/devtools-structured'
+    | '/devtools-subagents'
     | '/devtools-tools'
     | '/foreign-interrupt'
     | '/generation-persistence-resume'
@@ -1073,6 +1114,8 @@ export interface FileRouteTypes {
     | '/message-history-paging'
     | '/middleware-test'
     | '/persistence-durability'
+    | '/subagents-test'
+    | '/subagents-ui-test'
     | '/text-first-tool'
     | '/tool-first-text'
     | '/tools-test'
@@ -1136,6 +1179,7 @@ export interface FileRouteTypes {
     | '/api/sandbox-durability'
     | '/api/sandbox-file-persistence'
     | '/api/sandbox-tool-history'
+    | '/api/subagents-test'
     | '/api/summarize'
     | '/api/text-first-tool-wire'
     | '/api/tool-call-lifecycle-wire'
@@ -1164,6 +1208,7 @@ export interface FileRouteTypes {
     | '/devtools-route-a'
     | '/devtools-route-b'
     | '/devtools-structured'
+    | '/devtools-subagents'
     | '/devtools-tools'
     | '/foreign-interrupt'
     | '/generation-persistence-resume'
@@ -1176,6 +1221,8 @@ export interface FileRouteTypes {
     | '/message-history-paging'
     | '/middleware-test'
     | '/persistence-durability'
+    | '/subagents-test'
+    | '/subagents-ui-test'
     | '/text-first-tool'
     | '/tool-first-text'
     | '/tools-test'
@@ -1239,6 +1286,7 @@ export interface FileRouteTypes {
     | '/api/sandbox-durability'
     | '/api/sandbox-file-persistence'
     | '/api/sandbox-tool-history'
+    | '/api/subagents-test'
     | '/api/summarize'
     | '/api/text-first-tool-wire'
     | '/api/tool-call-lifecycle-wire'
@@ -1268,6 +1316,7 @@ export interface RootRouteChildren {
   DevtoolsRouteARoute: typeof DevtoolsRouteARoute
   DevtoolsRouteBRoute: typeof DevtoolsRouteBRoute
   DevtoolsStructuredRoute: typeof DevtoolsStructuredRoute
+  DevtoolsSubagentsRoute: typeof DevtoolsSubagentsRoute
   DevtoolsToolsRoute: typeof DevtoolsToolsRoute
   ForeignInterruptRoute: typeof ForeignInterruptRoute
   GenerationPersistenceResumeRoute: typeof GenerationPersistenceResumeRoute
@@ -1280,6 +1329,8 @@ export interface RootRouteChildren {
   MessageHistoryPagingRoute: typeof MessageHistoryPagingRoute
   MiddlewareTestRoute: typeof MiddlewareTestRoute
   PersistenceDurabilityRoute: typeof PersistenceDurabilityRoute
+  SubagentsTestRoute: typeof SubagentsTestRoute
+  SubagentsUiTestRoute: typeof SubagentsUiTestRoute
   TextFirstToolRoute: typeof TextFirstToolRoute
   ToolFirstTextRoute: typeof ToolFirstTextRoute
   ToolsTestRoute: typeof ToolsTestRoute
@@ -1343,6 +1394,7 @@ export interface RootRouteChildren {
   ApiSandboxDurabilityRoute: typeof ApiSandboxDurabilityRoute
   ApiSandboxFilePersistenceRoute: typeof ApiSandboxFilePersistenceRoute
   ApiSandboxToolHistoryRoute: typeof ApiSandboxToolHistoryRoute
+  ApiSubagentsTestRoute: typeof ApiSubagentsTestRoute
   ApiSummarizeRoute: typeof ApiSummarizeRoute
   ApiTextFirstToolWireRoute: typeof ApiTextFirstToolWireRoute
   ApiToolCallLifecycleWireRoute: typeof ApiToolCallLifecycleWireRoute
@@ -1392,6 +1444,20 @@ declare module '@tanstack/react-router' {
       path: '/text-first-tool'
       fullPath: '/text-first-tool'
       preLoaderRoute: typeof TextFirstToolRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/subagents-ui-test': {
+      id: '/subagents-ui-test'
+      path: '/subagents-ui-test'
+      fullPath: '/subagents-ui-test'
+      preLoaderRoute: typeof SubagentsUiTestRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/subagents-test': {
+      id: '/subagents-test'
+      path: '/subagents-test'
+      fullPath: '/subagents-test'
+      preLoaderRoute: typeof SubagentsTestRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/persistence-durability': {
@@ -1476,6 +1542,13 @@ declare module '@tanstack/react-router' {
       path: '/devtools-tools'
       fullPath: '/devtools-tools'
       preLoaderRoute: typeof DevtoolsToolsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/devtools-subagents': {
+      id: '/devtools-subagents'
+      path: '/devtools-subagents'
+      fullPath: '/devtools-subagents'
+      preLoaderRoute: typeof DevtoolsSubagentsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/devtools-structured': {
@@ -1623,6 +1696,13 @@ declare module '@tanstack/react-router' {
       path: '/api/summarize'
       fullPath: '/api/summarize'
       preLoaderRoute: typeof ApiSummarizeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/subagents-test': {
+      id: '/api/subagents-test'
+      path: '/api/subagents-test'
+      fullPath: '/api/subagents-test'
+      preLoaderRoute: typeof ApiSubagentsTestRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/sandbox-tool-history': {
@@ -2137,6 +2217,7 @@ const rootRouteChildren: RootRouteChildren = {
   DevtoolsRouteARoute: DevtoolsRouteARoute,
   DevtoolsRouteBRoute: DevtoolsRouteBRoute,
   DevtoolsStructuredRoute: DevtoolsStructuredRoute,
+  DevtoolsSubagentsRoute: DevtoolsSubagentsRoute,
   DevtoolsToolsRoute: DevtoolsToolsRoute,
   ForeignInterruptRoute: ForeignInterruptRoute,
   GenerationPersistenceResumeRoute: GenerationPersistenceResumeRoute,
@@ -2149,6 +2230,8 @@ const rootRouteChildren: RootRouteChildren = {
   MessageHistoryPagingRoute: MessageHistoryPagingRoute,
   MiddlewareTestRoute: MiddlewareTestRoute,
   PersistenceDurabilityRoute: PersistenceDurabilityRoute,
+  SubagentsTestRoute: SubagentsTestRoute,
+  SubagentsUiTestRoute: SubagentsUiTestRoute,
   TextFirstToolRoute: TextFirstToolRoute,
   ToolFirstTextRoute: ToolFirstTextRoute,
   ToolsTestRoute: ToolsTestRoute,
@@ -2212,6 +2295,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiSandboxDurabilityRoute: ApiSandboxDurabilityRoute,
   ApiSandboxFilePersistenceRoute: ApiSandboxFilePersistenceRoute,
   ApiSandboxToolHistoryRoute: ApiSandboxToolHistoryRoute,
+  ApiSubagentsTestRoute: ApiSubagentsTestRoute,
   ApiSummarizeRoute: ApiSummarizeRoute,
   ApiTextFirstToolWireRoute: ApiTextFirstToolWireRoute,
   ApiToolCallLifecycleWireRoute: ApiToolCallLifecycleWireRoute,
