@@ -28,6 +28,7 @@ import { Route as HeadlessUiRouteImport } from './routes/headless-ui'
 import { Route as GenerationPersistenceServerRouteImport } from './routes/generation-persistence-server'
 import { Route as GenerationPersistenceResumeRouteImport } from './routes/generation-persistence-resume'
 import { Route as ForeignInterruptRouteImport } from './routes/foreign-interrupt'
+import { Route as ForeignChunkEventsRouteImport } from './routes/foreign-chunk-events'
 import { Route as DevtoolsToolsRouteImport } from './routes/devtools-tools'
 import { Route as DevtoolsSubagentsRouteImport } from './routes/devtools-subagents'
 import { Route as DevtoolsStructuredRouteImport } from './routes/devtools-structured'
@@ -108,6 +109,7 @@ import { Route as ApiGenerationPersistenceResumeRouteImport } from './routes/api
 import { Route as ApiGeminiNativeImageWireRouteImport } from './routes/api.gemini-native-image-wire'
 import { Route as ApiGeminiImageGaModelsRouteImport } from './routes/api.gemini-image-ga-models'
 import { Route as ApiForeignInterruptRouteImport } from './routes/api.foreign-interrupt'
+import { Route as ApiForeignChunkEventsRouteImport } from './routes/api.foreign-chunk-events'
 import { Route as ApiFileSourceWireRouteImport } from './routes/api.file-source-wire'
 import { Route as ApiEmbeddingRouteImport } from './routes/api.embedding'
 import { Route as ApiDurableTakeoverRouteImport } from './routes/api.durable-takeover'
@@ -228,6 +230,11 @@ const GenerationPersistenceResumeRoute =
 const ForeignInterruptRoute = ForeignInterruptRouteImport.update({
   id: '/foreign-interrupt',
   path: '/foreign-interrupt',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ForeignChunkEventsRoute = ForeignChunkEventsRouteImport.update({
+  id: '/foreign-chunk-events',
+  path: '/foreign-chunk-events',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DevtoolsToolsRoute = DevtoolsToolsRouteImport.update({
@@ -649,6 +656,11 @@ const ApiForeignInterruptRoute = ApiForeignInterruptRouteImport.update({
   path: '/api/foreign-interrupt',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiForeignChunkEventsRoute = ApiForeignChunkEventsRouteImport.update({
+  id: '/api/foreign-chunk-events',
+  path: '/api/foreign-chunk-events',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiFileSourceWireRoute = ApiFileSourceWireRouteImport.update({
   id: '/api/file-source-wire',
   path: '/api/file-source-wire',
@@ -788,6 +800,7 @@ export interface FileRoutesByFullPath {
   '/devtools-structured': typeof DevtoolsStructuredRoute
   '/devtools-subagents': typeof DevtoolsSubagentsRoute
   '/devtools-tools': typeof DevtoolsToolsRoute
+  '/foreign-chunk-events': typeof ForeignChunkEventsRoute
   '/foreign-interrupt': typeof ForeignInterruptRoute
   '/generation-persistence-resume': typeof GenerationPersistenceResumeRoute
   '/generation-persistence-server': typeof GenerationPersistenceServerRoute
@@ -826,6 +839,7 @@ export interface FileRoutesByFullPath {
   '/api/durable-takeover': typeof ApiDurableTakeoverRoute
   '/api/embedding': typeof ApiEmbeddingRoute
   '/api/file-source-wire': typeof ApiFileSourceWireRoute
+  '/api/foreign-chunk-events': typeof ApiForeignChunkEventsRoute
   '/api/foreign-interrupt': typeof ApiForeignInterruptRoute
   '/api/gemini-image-ga-models': typeof ApiGeminiImageGaModelsRoute
   '/api/gemini-native-image-wire': typeof ApiGeminiNativeImageWireRoute
@@ -913,6 +927,7 @@ export interface FileRoutesByTo {
   '/devtools-structured': typeof DevtoolsStructuredRoute
   '/devtools-subagents': typeof DevtoolsSubagentsRoute
   '/devtools-tools': typeof DevtoolsToolsRoute
+  '/foreign-chunk-events': typeof ForeignChunkEventsRoute
   '/foreign-interrupt': typeof ForeignInterruptRoute
   '/generation-persistence-resume': typeof GenerationPersistenceResumeRoute
   '/generation-persistence-server': typeof GenerationPersistenceServerRoute
@@ -951,6 +966,7 @@ export interface FileRoutesByTo {
   '/api/durable-takeover': typeof ApiDurableTakeoverRoute
   '/api/embedding': typeof ApiEmbeddingRoute
   '/api/file-source-wire': typeof ApiFileSourceWireRoute
+  '/api/foreign-chunk-events': typeof ApiForeignChunkEventsRoute
   '/api/foreign-interrupt': typeof ApiForeignInterruptRoute
   '/api/gemini-image-ga-models': typeof ApiGeminiImageGaModelsRoute
   '/api/gemini-native-image-wire': typeof ApiGeminiNativeImageWireRoute
@@ -1039,6 +1055,7 @@ export interface FileRoutesById {
   '/devtools-structured': typeof DevtoolsStructuredRoute
   '/devtools-subagents': typeof DevtoolsSubagentsRoute
   '/devtools-tools': typeof DevtoolsToolsRoute
+  '/foreign-chunk-events': typeof ForeignChunkEventsRoute
   '/foreign-interrupt': typeof ForeignInterruptRoute
   '/generation-persistence-resume': typeof GenerationPersistenceResumeRoute
   '/generation-persistence-server': typeof GenerationPersistenceServerRoute
@@ -1077,6 +1094,7 @@ export interface FileRoutesById {
   '/api/durable-takeover': typeof ApiDurableTakeoverRoute
   '/api/embedding': typeof ApiEmbeddingRoute
   '/api/file-source-wire': typeof ApiFileSourceWireRoute
+  '/api/foreign-chunk-events': typeof ApiForeignChunkEventsRoute
   '/api/foreign-interrupt': typeof ApiForeignInterruptRoute
   '/api/gemini-image-ga-models': typeof ApiGeminiImageGaModelsRoute
   '/api/gemini-native-image-wire': typeof ApiGeminiNativeImageWireRoute
@@ -1166,6 +1184,7 @@ export interface FileRouteTypes {
     | '/devtools-structured'
     | '/devtools-subagents'
     | '/devtools-tools'
+    | '/foreign-chunk-events'
     | '/foreign-interrupt'
     | '/generation-persistence-resume'
     | '/generation-persistence-server'
@@ -1204,6 +1223,7 @@ export interface FileRouteTypes {
     | '/api/durable-takeover'
     | '/api/embedding'
     | '/api/file-source-wire'
+    | '/api/foreign-chunk-events'
     | '/api/foreign-interrupt'
     | '/api/gemini-image-ga-models'
     | '/api/gemini-native-image-wire'
@@ -1291,6 +1311,7 @@ export interface FileRouteTypes {
     | '/devtools-structured'
     | '/devtools-subagents'
     | '/devtools-tools'
+    | '/foreign-chunk-events'
     | '/foreign-interrupt'
     | '/generation-persistence-resume'
     | '/generation-persistence-server'
@@ -1329,6 +1350,7 @@ export interface FileRouteTypes {
     | '/api/durable-takeover'
     | '/api/embedding'
     | '/api/file-source-wire'
+    | '/api/foreign-chunk-events'
     | '/api/foreign-interrupt'
     | '/api/gemini-image-ga-models'
     | '/api/gemini-native-image-wire'
@@ -1416,6 +1438,7 @@ export interface FileRouteTypes {
     | '/devtools-structured'
     | '/devtools-subagents'
     | '/devtools-tools'
+    | '/foreign-chunk-events'
     | '/foreign-interrupt'
     | '/generation-persistence-resume'
     | '/generation-persistence-server'
@@ -1454,6 +1477,7 @@ export interface FileRouteTypes {
     | '/api/durable-takeover'
     | '/api/embedding'
     | '/api/file-source-wire'
+    | '/api/foreign-chunk-events'
     | '/api/foreign-interrupt'
     | '/api/gemini-image-ga-models'
     | '/api/gemini-native-image-wire'
@@ -1542,6 +1566,7 @@ export interface RootRouteChildren {
   DevtoolsStructuredRoute: typeof DevtoolsStructuredRoute
   DevtoolsSubagentsRoute: typeof DevtoolsSubagentsRoute
   DevtoolsToolsRoute: typeof DevtoolsToolsRoute
+  ForeignChunkEventsRoute: typeof ForeignChunkEventsRoute
   ForeignInterruptRoute: typeof ForeignInterruptRoute
   GenerationPersistenceResumeRoute: typeof GenerationPersistenceResumeRoute
   GenerationPersistenceServerRoute: typeof GenerationPersistenceServerRoute
@@ -1580,6 +1605,7 @@ export interface RootRouteChildren {
   ApiDurableTakeoverRoute: typeof ApiDurableTakeoverRoute
   ApiEmbeddingRoute: typeof ApiEmbeddingRoute
   ApiFileSourceWireRoute: typeof ApiFileSourceWireRoute
+  ApiForeignChunkEventsRoute: typeof ApiForeignChunkEventsRoute
   ApiForeignInterruptRoute: typeof ApiForeignInterruptRoute
   ApiGeminiImageGaModelsRoute: typeof ApiGeminiImageGaModelsRoute
   ApiGeminiNativeImageWireRoute: typeof ApiGeminiNativeImageWireRoute
@@ -1783,6 +1809,13 @@ declare module '@tanstack/react-router' {
       path: '/foreign-interrupt'
       fullPath: '/foreign-interrupt'
       preLoaderRoute: typeof ForeignInterruptRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/foreign-chunk-events': {
+      id: '/foreign-chunk-events'
+      path: '/foreign-chunk-events'
+      fullPath: '/foreign-chunk-events'
+      preLoaderRoute: typeof ForeignChunkEventsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/devtools-tools': {
@@ -2345,6 +2378,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiForeignInterruptRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/foreign-chunk-events': {
+      id: '/api/foreign-chunk-events'
+      path: '/api/foreign-chunk-events'
+      fullPath: '/api/foreign-chunk-events'
+      preLoaderRoute: typeof ApiForeignChunkEventsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/file-source-wire': {
       id: '/api/file-source-wire'
       path: '/api/file-source-wire'
@@ -2587,6 +2627,7 @@ const rootRouteChildren: RootRouteChildren = {
   DevtoolsStructuredRoute: DevtoolsStructuredRoute,
   DevtoolsSubagentsRoute: DevtoolsSubagentsRoute,
   DevtoolsToolsRoute: DevtoolsToolsRoute,
+  ForeignChunkEventsRoute: ForeignChunkEventsRoute,
   ForeignInterruptRoute: ForeignInterruptRoute,
   GenerationPersistenceResumeRoute: GenerationPersistenceResumeRoute,
   GenerationPersistenceServerRoute: GenerationPersistenceServerRoute,
@@ -2626,6 +2667,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiDurableTakeoverRoute: ApiDurableTakeoverRoute,
   ApiEmbeddingRoute: ApiEmbeddingRoute,
   ApiFileSourceWireRoute: ApiFileSourceWireRoute,
+  ApiForeignChunkEventsRoute: ApiForeignChunkEventsRoute,
   ApiForeignInterruptRoute: ApiForeignInterruptRoute,
   ApiGeminiImageGaModelsRoute: ApiGeminiImageGaModelsRoute,
   ApiGeminiNativeImageWireRoute: ApiGeminiNativeImageWireRoute,
