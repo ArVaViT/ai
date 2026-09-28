@@ -243,6 +243,12 @@ export class StreamProcessor {
 
   // Run tracking (for concurrent run safety)
   private readonly activeRuns = new Set<string>()
+  // Tool calls started since the last RUN_STARTED, in order. A success
+  // RUN_FINISHED hands the unanswered ones to the client.
+  private runToolCallIds: Array<string> = []
+  // Tool calls that an interrupt or tool-input-available already handed to
+  // onToolCall in this run, so the success path does not run them twice.
+  private readonly toolCallsSentToClient = new Set<string>()
   // Direct children by subagentRunId. See childProcessor().
   private readonly childProcessors = new Map<string, StreamProcessor>()
   // Child tool calls whose later events may omit subagentRunId.
@@ -1886,6 +1892,7 @@ export class StreamProcessor {
 
       state.toolCalls.set(toolCallId, newToolCall)
       state.toolCallOrder.push(toolCallId)
+      this.runToolCallIds.push(toolCallId)
 
       // Store mapping for TOOL_CALL_ARGS/END routing
       this.toolCallToMessage.set(toolCallId, messageId)
@@ -2115,6 +2122,11 @@ export class StreamProcessor {
   private handleRunStartedEvent(
     chunk: Extract<StreamChunk, { type: 'RUN_STARTED' }>,
   ): void {
+    // A run that overlaps another keeps the calls both runs started.
+    if (this.activeRuns.size === 0) {
+      this.runToolCallIds = []
+      this.toolCallsSentToClient.clear()
+    }
     this.activeRuns.add(chunk.runId)
   }
 
@@ -2150,8 +2162,50 @@ export class StreamProcessor {
       if (isIntermediateToolTurn) {
         return
       }
+      if (!chunk.outcome || chunk.outcome.type === 'success') {
+        this.handlePendingToolCalls(chunk.outcome?.pendingToolCallIds)
+      }
       this.isDone = true
       this.finalizeStream()
+    }
+  }
+
+  /**
+   * AG-UI ends a run that calls a frontend tool with a success outcome and
+   * leaves the call unanswered. The pending calls are the ones named in
+   * `pendingToolCallIds`, or else every call this run started that has no
+   * result. Fire onToolCall for each, so the client runs it and continues.
+   */
+  private handlePendingToolCalls(pendingToolCallIds?: Array<string>): void {
+    const ids = pendingToolCallIds?.length
+      ? pendingToolCallIds
+      : this.runToolCallIds
+    for (const toolCallId of ids) {
+      // Read the part, not the stream state: a MESSAGES_SNAPSHOT before
+      // RUN_FINISHED resets the stream state.
+      const part = this.messages
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- `parts` is typed as required, but seeded ModelMessage-shaped messages can lack it at runtime.
+        .flatMap((msg) => msg.parts ?? [])
+        .find(
+          (p): p is ToolCallPart =>
+            p.type === 'tool-call' && p.id === toolCallId,
+        )
+      if (
+        !part ||
+        // The provider already ran it (e.g. Anthropic web_search).
+        isProviderExecutedToolCall(part) ||
+        this.toolCallsSentToClient.has(toolCallId) ||
+        this.isToolCallPartTerminal(toolCallId) ||
+        this.isToolCallPartAwaitingUserAction(toolCallId)
+      ) {
+        continue
+      }
+      this.events.onToolCall?.({
+        toolCallId,
+        toolName: part.name,
+        // An empty argument string is a call with no arguments.
+        input: part.input ?? (part.arguments.trim() === '' ? {} : undefined),
+      })
     }
   }
 
@@ -2237,6 +2291,7 @@ export class StreamProcessor {
         // Generic interrupts in the same batch decide `toolResume`. Do not
         // run client tools until that policy is `continue`.
         if (hasGeneric || !emit) continue
+        this.toolCallsSentToClient.add(toolCallId)
         this.events.onToolCall?.({
           toolCallId,
           toolName,
@@ -2547,6 +2602,7 @@ export class StreamProcessor {
       }
 
       // Emit onToolCall event for the client to execute the tool
+      this.toolCallsSentToClient.add(toolCallId)
       this.events.onToolCall?.({
         toolCallId,
         toolName,
