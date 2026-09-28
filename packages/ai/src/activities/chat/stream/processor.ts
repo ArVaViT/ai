@@ -897,6 +897,35 @@ export class StreamProcessor {
     }
   }
 
+  /**
+   * The child an untagged chunk with no id continues: the only child with an
+   * open chunk stream of its kind, when this processor has none. The AG-UI
+   * client resolves a chunk that tags only its opener the same way.
+   */
+  private childContinuing(chunk: StreamChunk): string | undefined {
+    let family: ChunkFamily
+    if (chunk.type === 'TEXT_MESSAGE_CHUNK' && chunk.messageId === undefined) {
+      family = 'TEXT_MESSAGE'
+    } else if (
+      chunk.type === 'REASONING_MESSAGE_CHUNK' &&
+      chunk.messageId === undefined
+    ) {
+      family = 'REASONING_MESSAGE'
+    } else if (
+      chunk.type === 'TOOL_CALL_CHUNK' &&
+      chunk.toolCallId === undefined
+    ) {
+      family = 'TOOL_CALL'
+    } else {
+      return undefined
+    }
+    if (this.openChunk?.family === family) return undefined
+    const owners = [...this.childProcessors].filter(
+      ([, child]) => child.openChunk?.family === family,
+    )
+    return owners.length === 1 ? owners[0]?.[0] : undefined
+  }
+
   /** The id a chunk opens or continues. A chunk with no id continues. */
   private chunkStreamId(
     family: ChunkFamily,
@@ -911,7 +940,6 @@ export class StreamProcessor {
     return undefined
   }
 
-  /** The END event for the open chunk stream, if there is one. */
   private closeChunk(): Array<StreamChunk> {
     const open = this.openChunk
     if (!open) return []
@@ -1362,6 +1390,8 @@ export class StreamProcessor {
       id = chunk.subagentRunId
     } else if ('toolCallId' in chunk && typeof chunk.toolCallId === 'string') {
       id = this.childToolCalls.get(chunk.toolCallId)
+    } else {
+      id = this.childContinuing(chunk)
     }
     if (id === undefined) return false
     const owner = this.childOwning(id)

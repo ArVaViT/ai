@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { StreamProcessor } from '../src/activities/chat/stream/processor'
 import { ev } from './test-utils'
 import { EventType, type StreamChunk } from '../src/types'
@@ -132,4 +132,87 @@ describe('StreamProcessor subagent parts', () => {
       ).toMatchObject({ id: 'child-tool', output: 'found' })
     },
   )
+
+  describe('an untagged chunk with no id', () => {
+    const started = (subagentRunId: string) =>
+      ({
+        type: EventType.SUBAGENT_STARTED,
+        subagentRunId,
+        name: subagentRunId,
+        timestamp: Date.now(),
+      }) as StreamChunk
+    const toolChunk = (fields: Record<string, unknown>) =>
+      ({
+        type: EventType.TOOL_CALL_CHUNK,
+        timestamp: Date.now(),
+        ...fields,
+      }) as StreamChunk
+    const toolCallsOf = (processor: StreamProcessor) =>
+      processor
+        .getMessages()
+        .flatMap((message) => message.parts)
+        .flatMap((part) =>
+          part.type === 'subagent'
+            ? part.subagent.messages.flatMap((message) => message.parts)
+            : [part],
+        )
+        .filter((part) => part.type === 'tool-call')
+        .map((part) => part.type === 'tool-call' && part.arguments)
+    const run = (...chunks: Array<StreamChunk>) => {
+      const processor = new StreamProcessor()
+      for (const c of [ev.runStarted(), ...chunks]) processor.processChunk(c)
+      return toolCallsOf(processor)
+    }
+
+    it('continues the only open stream of a child', () => {
+      expect(
+        run(
+          started('sub-1'),
+          attributed(
+            toolChunk({
+              toolCallId: 'tc-1',
+              toolCallName: 'a',
+              delta: '{"q":',
+            }),
+            'sub-1',
+          ),
+          toolChunk({ delta: '1}' }),
+        ),
+      ).toEqual(['{"q":1}'])
+    })
+
+    it('continues the open stream of this processor first', () => {
+      expect(
+        run(
+          started('sub-1'),
+          toolChunk({ toolCallId: 'tc-p', toolCallName: 'p', delta: '{"p":' }),
+          attributed(
+            toolChunk({ toolCallId: 'tc-1', toolCallName: 'a', delta: '{}' }),
+            'sub-1',
+          ),
+          toolChunk({ delta: '1}' }),
+        ),
+      ).toEqual(['{}', '{"p":1}'])
+    })
+
+    it('does not guess between two open child streams', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      expect(
+        run(
+          started('sub-1'),
+          started('sub-2'),
+          attributed(
+            toolChunk({ toolCallId: 'tc-1', toolCallName: 'a', delta: '{' }),
+            'sub-1',
+          ),
+          attributed(
+            toolChunk({ toolCallId: 'tc-2', toolCallName: 'b', delta: '{' }),
+            'sub-2',
+          ),
+          toolChunk({ delta: '}' }),
+        ),
+      ).toEqual(['{', '{'])
+      warn.mockRestore()
+    })
+  })
 })
