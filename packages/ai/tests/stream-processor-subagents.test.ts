@@ -79,4 +79,57 @@ describe('StreamProcessor subagent parts', () => {
     expect(part.subagent.error).toEqual({ message: 'Stopped' })
     expect(part.subagent.messages).toEqual([])
   })
+
+  it.each([
+    [
+      'TOOL_CALL_START',
+      {
+        type: EventType.TOOL_CALL_START,
+        toolCallId: 'child-tool',
+        toolCallName: 'lookup',
+      },
+    ],
+    [
+      'TOOL_CALL_CHUNK',
+      {
+        type: EventType.TOOL_CALL_CHUNK,
+        toolCallId: 'child-tool',
+        toolCallName: 'lookup',
+        delta: '{}',
+      },
+    ],
+  ])(
+    'routes an untagged result to the child that started the call with %s',
+    (_, start) => {
+      const processor = new StreamProcessor()
+      processor.processChunk(ev.runStarted())
+      processor.processChunk({
+        type: EventType.SUBAGENT_STARTED,
+        subagentRunId: 'sub-1',
+        name: 'researcher',
+        timestamp: Date.now(),
+      })
+      processor.processChunk(
+        attributed({ ...start, timestamp: Date.now() } as StreamChunk, 'sub-1'),
+      )
+      processor.processChunk({
+        type: EventType.TOOL_CALL_RESULT,
+        toolCallId: 'child-tool',
+        messageId: 'result-1',
+        content: '"found"',
+        timestamp: Date.now(),
+      })
+
+      const part = processor
+        .getMessages()
+        .flatMap((message) => message.parts)
+        .find((entry) => entry.type === 'subagent')
+      if (part?.type !== 'subagent') throw new Error('expected subagent part')
+      expect(
+        part.subagent.messages
+          .flatMap((message) => message.parts)
+          .find((entry) => entry.type === 'tool-call'),
+      ).toMatchObject({ id: 'child-tool', output: 'found' })
+    },
+  )
 })
