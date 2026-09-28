@@ -2178,7 +2178,7 @@ export class StreamProcessor {
    */
   private handlePendingToolCalls(pendingToolCallIds?: Array<string>): void {
     const ids = pendingToolCallIds?.length
-      ? pendingToolCallIds
+      ? pendingToolCallIds.filter((id) => this.runToolCallIds.includes(id))
       : this.runToolCallIds
     for (const toolCallId of ids) {
       // Read the part, not the stream state: a MESSAGES_SNAPSHOT before

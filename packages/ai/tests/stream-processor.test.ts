@@ -1949,6 +1949,23 @@ describe('StreamProcessor', () => {
       })
     })
 
+    it('ignores pendingToolCallIds of an earlier run', () => {
+      const { events, processor } = run(
+        ...toolCall('tc-1'),
+        ev.runError('boom'),
+      )
+      processor.processChunk(ev.runStarted('run-2'))
+      processor.processChunk(
+        chunk(EventType.RUN_FINISHED, {
+          runId: 'run-2',
+          threadId: 'thread-1',
+          outcome: { type: 'success', pendingToolCallIds: ['tc-1'] },
+        }),
+      )
+
+      expect(events.onToolCall).not.toHaveBeenCalled()
+    })
+
     it('skips calls the run answered with TOOL_CALL_RESULT', () => {
       const { events } = run(
         ...toolCall('tc-1'),

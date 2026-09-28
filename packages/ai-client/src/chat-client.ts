@@ -509,7 +509,6 @@ export class ChatClient<
   private readonly postStreamActions: Array<() => Promise<void>> = []
   // Track pending client tool executions to await them before stream finalization
   private readonly pendingToolExecutions: Map<string, Promise<void>> = new Map()
-  // True while the processor reads a RUN_FINISHED without an interrupt.
   private handingOverPendingToolCalls = false
   private activeClientTools: Map<string, AnyClientTool> | null = null
   private activeContext: TContext | undefined = undefined
