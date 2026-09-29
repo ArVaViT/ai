@@ -641,13 +641,8 @@ export class StreamProcessor {
   }
 
   /**
-   * Process a single chunk from the stream.
-   *
-   * Central dispatch for all AG-UI events. Each event type maps to a specific
-   * handler. Events not listed in the switch are intentionally ignored
-   * (STEP_STARTED, STATE_SNAPSHOT, STATE_DELTA).
-   *
-   * @see docs/chat-architecture.md#adapter-contract — Expected event types and ordering
+   * Process a single chunk from the stream: send a subagent's chunk to its
+   * child, expand *_CHUNK shorthand, then dispatch each event.
    */
   processChunk(chunk: StreamChunk): void {
     // Record chunk if enabled
@@ -664,6 +659,13 @@ export class StreamProcessor {
     for (const event of this.expandChunk(chunk)) this.dispatchChunk(event)
   }
 
+  /**
+   * Central dispatch for all AG-UI events. Each event type maps to a specific
+   * handler. Events not listed in the switch are intentionally ignored
+   * (STEP_STARTED, STATE_SNAPSHOT, STATE_DELTA).
+   *
+   * @see docs/chat-architecture.md#adapter-contract — Expected event types and ordering
+   */
   private dispatchChunk(chunk: StreamChunk): void {
     const c = chunk
     // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check -- AG-UI EventType enum members vs string-literal case labels; default branch handles untraced events.
@@ -794,7 +796,8 @@ export class StreamProcessor {
    * AG-UI lets a producer send one TEXT_MESSAGE_CHUNK, TOOL_CALL_CHUNK or
    * REASONING_MESSAGE_CHUNK in place of the START / CONTENT (ARGS) / END
    * events. A chunk with a new id opens a stream. A chunk with the same id or
-   * no id continues it. Any other event closes it. Expand the shorthand into
+   * no id continues it. Any other event closes it, except the ones in
+   * CHUNK_PASS_THROUGH. Expand the shorthand into
    * those events, so both forms build the same message.
    */
   private expandChunk(chunk: StreamChunk): Array<StreamChunk> {
@@ -927,7 +930,10 @@ export class StreamProcessor {
     return undefined
   }
 
-  /** How many open chunk streams of a kind this processor and its children hold. */
+  /**
+   * How many open chunk streams of a kind this processor and all its nested
+   * children hold.
+   */
   private openChunkCount(family: ChunkFamily): number {
     let count = this.openChunk?.family === family ? 1 : 0
     for (const child of this.childProcessors.values()) {
@@ -1382,7 +1388,9 @@ export class StreamProcessor {
   /**
    * Send a child's chunk to that child's processor, so the card keeps text,
    * reasoning, tool calls, results, and nested children. A tool event without
-   * `subagentRunId` follows its `TOOL_CALL_START`.
+   * `subagentRunId` follows its `TOOL_CALL_START` or `TOOL_CALL_CHUNK`. An
+   * untagged chunk with no id follows a child's open chunk stream (see
+   * childContinuing()).
    */
   private routeToChild(chunk: StreamChunk): boolean {
     let id: string | undefined
@@ -1392,7 +1400,7 @@ export class StreamProcessor {
       chunk.type === 'SUBAGENT_FINISHED' ||
       chunk.type === 'SUBAGENT_ERROR'
     ) {
-      // A direct child's own lifecycle goes to processChunk's switch, not to a
+      // A direct child's own lifecycle goes to dispatchChunk's switch, not to a
       // child.
       if (this.findSubagentPart(chunk.subagentRunId)) return false
       id = chunk.subagentRunId
