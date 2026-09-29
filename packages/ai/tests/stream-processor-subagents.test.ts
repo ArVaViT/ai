@@ -234,6 +234,7 @@ describe('StreamProcessor subagent parts', () => {
           toolChunk({ delta: '}' }),
         ),
       ).toEqual(['{', '{'])
+      expect(warn).toHaveBeenCalledOnce()
       warn.mockRestore()
     })
   })
