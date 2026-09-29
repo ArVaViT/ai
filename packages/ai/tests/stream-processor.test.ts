@@ -2123,7 +2123,7 @@ describe('StreamProcessor', () => {
       expect(events.onToolCall.mock.calls[0]![0].toolCallId).toBe('tc-1')
     })
 
-    it('runs a reused call id again after clearMessages()', () => {
+    it('runs a reused call id again in a later run', () => {
       const legacyRun = [
         ...toolCall('call_0'),
         ev.custom('tool-input-available', {

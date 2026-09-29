@@ -288,7 +288,7 @@ Register the client tools as in [Client-Side](#client-side), and point the conne
 The AG-UI spec ends such a run with `RUN_FINISHED` and a success outcome. The tool call gets no `TOOL_CALL_RESULT`. When that run ends:
 
 - The client runs each tool call that the run started and did not answer.
-- If the server names the calls in `outcome.pendingToolCallIds`, the client runs only those calls.
+- If the server names the calls in `outcome.pendingToolCallIds`, the client runs only those of them that this run started.
 - The next request carries each result as a `role: "tool"` message.
 
 If no client tool has the name of the call, the call does not run. A client tool with `needsApproval: true` does not run on this path, because the server did not ask for approval.

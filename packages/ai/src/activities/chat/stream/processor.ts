@@ -243,11 +243,12 @@ export class StreamProcessor {
 
   // Run tracking (for concurrent run safety)
   private readonly activeRuns = new Set<string>()
-  // Tool calls started since the last RUN_STARTED, in order. A success
-  // RUN_FINISHED hands the unanswered ones to the client.
+  // Tool calls started since a RUN_STARTED that found no other run active, in
+  // order. A success RUN_FINISHED hands the unanswered ones to the client.
   private runToolCallIds: Array<string> = []
   // Tool calls that an interrupt or tool-input-available already handed to
-  // onToolCall in this run, so the success path does not run them twice.
+  // onToolCall since that same reset, so the success path does not run them
+  // twice.
   private readonly toolCallsSentToClient = new Set<string>()
   // Direct children by subagentRunId. See childProcessor().
   private readonly childProcessors = new Map<string, StreamProcessor>()
