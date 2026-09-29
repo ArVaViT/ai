@@ -1,7 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 import { StreamProcessor } from '../src/activities/chat/stream/processor'
 import { ev } from './test-utils'
-import { EventType, type StreamChunk } from '../src/types'
+import {
+  EventType,
+  type MessagePart,
+  type StreamChunk,
+  type UIMessage,
+} from '../src/types'
 
 function attributed(chunk: StreamChunk, subagentRunId: string) {
   return { ...chunk, subagentRunId }
@@ -147,17 +152,16 @@ describe('StreamProcessor subagent parts', () => {
         timestamp: Date.now(),
         ...fields,
       }) as StreamChunk
-    const toolCallsOf = (processor: StreamProcessor) =>
-      processor
-        .getMessages()
+    const partsOf = (messages: Array<UIMessage>): Array<MessagePart> =>
+      messages
         .flatMap((message) => message.parts)
         .flatMap((part) =>
-          part.type === 'subagent'
-            ? part.subagent.messages.flatMap((message) => message.parts)
-            : [part],
+          part.type === 'subagent' ? partsOf(part.subagent.messages) : [part],
         )
-        .filter((part) => part.type === 'tool-call')
-        .map((part) => part.type === 'tool-call' && part.arguments)
+    const toolCallsOf = (processor: StreamProcessor) =>
+      partsOf(processor.getMessages()).flatMap((part) =>
+        part.type === 'tool-call' ? [part.arguments] : [],
+      )
     const run = (...chunks: Array<StreamChunk>) => {
       const processor = new StreamProcessor()
       for (const c of [ev.runStarted(), ...chunks]) processor.processChunk(c)
@@ -179,6 +183,24 @@ describe('StreamProcessor subagent parts', () => {
           toolChunk({ delta: '1}' }),
         ),
       ).toEqual(['{"q":1}'])
+    })
+
+    it('continues the only open stream of a nested child', () => {
+      expect(
+        run(
+          started('sub-1'),
+          { ...started('sub-2'), parentSubagentRunId: 'sub-1' } as StreamChunk,
+          attributed(
+            toolChunk({
+              toolCallId: 'tc-2',
+              toolCallName: 'b',
+              delta: '{"q":',
+            }),
+            'sub-2',
+          ),
+          toolChunk({ delta: '2}' }),
+        ),
+      ).toEqual(['{"q":2}'])
     })
 
     it('continues the open stream of this processor first', () => {

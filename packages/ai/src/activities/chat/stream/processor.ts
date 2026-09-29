@@ -898,9 +898,10 @@ export class StreamProcessor {
   }
 
   /**
-   * The child an untagged chunk with no id continues: the only child with an
-   * open chunk stream of its kind, when this processor has none. The AG-UI
-   * client resolves a chunk that tags only its opener the same way.
+   * The child an untagged chunk with no id continues: the only child whose
+   * subtree has an open chunk stream of its kind, when this processor has
+   * none. The AG-UI client resolves a chunk that tags only its opener the
+   * same way.
    */
   private childContinuing(chunk: StreamChunk): string | undefined {
     let family: ChunkFamily
@@ -919,11 +920,20 @@ export class StreamProcessor {
     } else {
       return undefined
     }
-    if (this.openChunk?.family === family) return undefined
-    const owners = [...this.childProcessors].filter(
-      ([, child]) => child.openChunk?.family === family,
-    )
-    return owners.length === 1 ? owners[0]?.[0] : undefined
+    if (this.openChunkCount(family) !== 1) return undefined
+    for (const [id, child] of this.childProcessors) {
+      if (child.openChunkCount(family) === 1) return id
+    }
+    return undefined
+  }
+
+  /** How many open chunk streams of a kind this processor and its children hold. */
+  private openChunkCount(family: ChunkFamily): number {
+    let count = this.openChunk?.family === family ? 1 : 0
+    for (const child of this.childProcessors.values()) {
+      count += child.openChunkCount(family)
+    }
+    return count
   }
 
   /** The id a chunk opens or continues. A chunk with no id continues. */
