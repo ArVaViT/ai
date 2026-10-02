@@ -45,9 +45,9 @@ every registered id resolves against the first-party Anthropic API.
 
 `output_config.effort` is typed only on the adaptive-era models
 (`claude-opus-4-7`, `claude-opus-4-8`, `claude-sonnet-5`, `claude-sonnet-5-5`,
-`claude-fable-5`, `claude-fable-5-1`). There is no top-level `effort` option
-on any model; `claude-opus-4-6` / `claude-sonnet-4-6` accept
-`thinking: { type: 'adaptive' }` but no effort knob.
+`claude-fable-5`, `claude-fable-5-1`, `claude-opus-5`, `claude-opus-5-5`).
+There is no top-level `effort` option on any model. `claude-opus-4-6` /
+`claude-sonnet-4-6` accept `thinking: { type: 'adaptive' }` but no effort knob.
 
 ## Provider-Specific modelOptions
 
