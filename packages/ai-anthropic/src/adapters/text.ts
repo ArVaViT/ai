@@ -1591,6 +1591,7 @@ export class AnthropicTextAdapter<
                       'The response was cut off because the maximum token limit was reached.',
                     code: 'max_tokens',
                   },
+                  usage: buildAnthropicUsage(event.usage),
                 }
                 break
               }

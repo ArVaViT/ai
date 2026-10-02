@@ -363,4 +363,69 @@ describe('Anthropic usage extraction', () => {
     expect(tokenUsageOf(doneChunk)?.totalTokens).toBe(100)
     expect(Number.isNaN(tokenUsageOf(doneChunk)?.totalTokens)).toBe(false)
   })
+
+  it('reports usage on the RUN_ERROR of a max_tokens stop (#1597)', async () => {
+    const mockStream = createMockStream([
+      {
+        type: 'message_start',
+        message: {
+          id: 'msg_123',
+          type: 'message',
+          role: 'assistant',
+          content: [],
+          model: 'claude-opus-4-1',
+          usage: {
+            input_tokens: 13,
+            output_tokens: 1,
+            cache_read_input_tokens: 40,
+          },
+        },
+      },
+      {
+        type: 'content_block_start',
+        index: 0,
+        content_block: { type: 'text', text: '' },
+      },
+      {
+        type: 'content_block_delta',
+        index: 0,
+        delta: { type: 'text_delta', text: 'Hello there' },
+      },
+      {
+        type: 'message_delta',
+        delta: { stop_reason: 'max_tokens' },
+        usage: {
+          input_tokens: 13,
+          output_tokens: 3,
+          cache_creation_input_tokens: 0,
+          cache_read_input_tokens: 40,
+        },
+      },
+      {
+        type: 'message_stop',
+      },
+    ])
+
+    mocks.betaMessagesCreate.mockResolvedValueOnce(mockStream)
+
+    const chunks: Array<AdapterYieldChunk> = []
+    for await (const chunk of chat({
+      adapter: createAdapter(),
+      messages: [{ role: 'user', content: 'Say hello in five words.' }],
+      modelOptions: { max_tokens: 3 },
+    })) {
+      chunks.push(chunk)
+    }
+
+    // The run still ends in RUN_ERROR, and that chunk now carries the tokens
+    // that Anthropic billed for the cut-off response.
+    const errorChunk = chunks.find((c) => c.type === 'RUN_ERROR')
+    expect(errorChunk).toMatchObject({ code: 'max_tokens' })
+    expect(tokenUsageOf(errorChunk)).toEqual({
+      promptTokens: 13,
+      completionTokens: 3,
+      totalTokens: 16,
+      promptTokensDetails: { cachedTokens: 40 },
+    })
+  })
 })
