@@ -281,7 +281,7 @@ Client tools are **automatically executed** when the model calls them. The flow 
 
 ## Client Tools With Other AG-UI Servers
 
-Your agent runs on another AG-UI server, such as Pydantic AI or LangGraph. It calls a frontend tool, then ends the run. `useChat` runs the tool and starts the next run with the result.
+Your agent runs on another AG-UI server, such as Pydantic AI. It calls a frontend tool, then ends the run. `useChat` runs the tool and starts the next run with the result.
 
 Register the client tools as in [Client-Side](#client-side), and point the connection at the endpoint of that server, for example `fetchServerSentEvents("/agent")`.
 
@@ -291,7 +291,7 @@ The AG-UI spec ends such a run with `RUN_FINISHED` and a success outcome. The to
 - If the server names the calls in `outcome.pendingToolCallIds`, the client runs only those of them that this run started.
 - The next request carries each result as a `role: "tool"` message.
 
-If no client tool has the name of the call, the call does not run. A client tool with `needsApproval: true` does not run on this path, because the server did not ask for approval.
+If no client tool has the name of the call, the call does not run. If the arguments of the call are not complete JSON, the call does not run. A client tool with `needsApproval: true` does not run on this path, because the server did not ask for approval.
 
 ## Expose Client Tools Through WebMCP
 
