@@ -5351,6 +5351,27 @@ describe('StreamProcessor', () => {
       warn.mockRestore()
     })
 
+    it('closes the open stream when it drops an id-less chunk of another kind', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const chunked = messagesOf(
+        ev.runStarted(),
+        toolChunk({
+          toolCallId: 'tc-1',
+          toolCallName: 'lookup',
+          delta: '{"a":1}',
+        }),
+        textChunk({ delta: 'orphan' }),
+        toolChunk({ delta: '{"b":2}' }),
+        ev.runFinished(),
+      )
+
+      expect(chunked[0]?.parts).toMatchObject([
+        { type: 'tool-call', id: 'tc-1', arguments: '{"a":1}' },
+      ])
+      expect(warn).toHaveBeenCalledTimes(2)
+      warn.mockRestore()
+    })
+
     it.each([
       'clearMessages',
       'prepareAssistantMessage',

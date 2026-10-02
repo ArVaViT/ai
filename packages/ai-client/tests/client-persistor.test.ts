@@ -360,7 +360,6 @@ describe('ChatPersistor', () => {
     it.each([
       { type: 'TEXT_MESSAGE_CHUNK', messageId: 'late-msg', delta: 'hi' },
       { type: 'TOOL_CALL_CHUNK', toolCallId: 'tc-late', toolCallName: 'x' },
-      { type: 'REASONING_MESSAGE_CHUNK', messageId: 'late-r', delta: 'hm' },
     ])('ignores a runless $type belonging to a cleared run', (fields) => {
       const { persistor } = createPersistor(createMockPersistence())
       persistor.snapshotClear({

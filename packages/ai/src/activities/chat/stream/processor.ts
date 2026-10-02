@@ -641,8 +641,13 @@ export class StreamProcessor {
   }
 
   /**
-   * Process a single chunk from the stream: send a subagent's chunk to its
-   * child, expand *_CHUNK shorthand, then dispatch each event.
+   * Process a single chunk from the stream.
+   *
+   * Central dispatch for all AG-UI events. Each event type maps to a specific
+   * handler. Events not listed in the switch are intentionally ignored
+   * (STEP_STARTED, STATE_SNAPSHOT, STATE_DELTA).
+   *
+   * @see docs/chat-architecture.md#adapter-contract — Expected event types and ordering
    */
   processChunk(chunk: StreamChunk): void {
     // Record chunk if enabled
@@ -659,13 +664,7 @@ export class StreamProcessor {
     for (const event of this.expandChunk(chunk)) this.dispatchChunk(event)
   }
 
-  /**
-   * Central dispatch for all AG-UI events. Each event type maps to a specific
-   * handler. Events not listed in the switch are intentionally ignored
-   * (STEP_STARTED, STATE_SNAPSHOT, STATE_DELTA).
-   *
-   * @see docs/chat-architecture.md#adapter-contract — Expected event types and ordering
-   */
+  /** Send one event, after expandChunk(), to its handler. */
   private dispatchChunk(chunk: StreamChunk): void {
     const c = chunk
     // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check -- AG-UI EventType enum members vs string-literal case labels; default branch handles untraced events.
@@ -797,8 +796,8 @@ export class StreamProcessor {
    * REASONING_MESSAGE_CHUNK in place of the START / CONTENT (ARGS) / END
    * events. A chunk with a new id opens a stream. A chunk with the same id or
    * no id continues it. Any other event closes it, except the ones in
-   * CHUNK_PASS_THROUGH. Expand the shorthand into
-   * those events, so both forms build the same message.
+   * CHUNK_PASS_THROUGH. Expand the shorthand into the START / CONTENT (ARGS)
+   * / END events, so both forms build the same message.
    */
   private expandChunk(chunk: StreamChunk): Array<StreamChunk> {
     const open = this.openChunk
@@ -811,7 +810,7 @@ export class StreamProcessor {
           chunk.messageId,
           chunk.type,
         )
-        if (id === undefined) return []
+        if (id === undefined) return this.closeChunk()
         const events: Array<StreamChunk> = []
         if (open?.family !== 'TEXT_MESSAGE' || open.id !== id) {
           events.push(...this.closeChunk(), {
@@ -835,7 +834,7 @@ export class StreamProcessor {
       }
       case 'TOOL_CALL_CHUNK': {
         const id = this.chunkStreamId('TOOL_CALL', chunk.toolCallId, chunk.type)
-        if (id === undefined) return []
+        if (id === undefined) return this.closeChunk()
         const events: Array<StreamChunk> = []
         if (open?.family !== 'TOOL_CALL' || open.id !== id) {
           if (chunk.toolCallName === undefined) {
@@ -872,7 +871,7 @@ export class StreamProcessor {
           chunk.messageId,
           chunk.type,
         )
-        if (id === undefined) return []
+        if (id === undefined) return this.closeChunk()
         const events: Array<StreamChunk> = []
         if (open?.family !== 'REASONING_MESSAGE' || open.id !== id) {
           events.push(...this.closeChunk(), {
@@ -942,7 +941,11 @@ export class StreamProcessor {
     return count
   }
 
-  /** The id a chunk opens or continues. A chunk with no id continues. */
+  /**
+   * The id a chunk opens or continues. A chunk with no id continues. If it
+   * continues nothing, the caller drops it and closes the open stream, so a
+   * later chunk with no id cannot continue that stream either.
+   */
   private chunkStreamId(
     family: ChunkFamily,
     id: string | undefined,

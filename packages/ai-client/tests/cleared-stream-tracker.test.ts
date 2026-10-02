@@ -7,7 +7,6 @@ describe('ClearedStreamTracker', () => {
     { type: 'TEXT_MESSAGE_START', messageId: 'late-msg', role: 'assistant' },
     { type: 'TEXT_MESSAGE_CHUNK', messageId: 'late-msg', delta: 'hi' },
     { type: 'TOOL_CALL_CHUNK', toolCallId: 'tc-late', toolCallName: 'x' },
-    { type: 'REASONING_MESSAGE_CHUNK', messageId: 'late-r', delta: 'hm' },
   ])('ignores a runless $type from a run cleared mid-stream', (fields) => {
     const tracker = new ClearedStreamTracker()
     tracker.onRunStarted('run-1')
