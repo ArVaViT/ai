@@ -433,13 +433,14 @@ describe('Anthropic usage extraction', () => {
   // Anthropic-compatible servers (aimock is one) can send only
   // `output_tokens` on the closing message_delta. The SDK types the other
   // counts there as nullable, and its MessageStream keeps the message_start
-  // values when they are null or missing.
+  // values (input, cache, and server tool counts) when they are null or
+  // missing.
   it.each([
     ['end_turn', 'RUN_FINISHED'],
     ['tool_use', 'RUN_FINISHED'],
     ['max_tokens', 'RUN_ERROR'],
   ] as const)(
-    'keeps the message_start input and cache counts when the %s message_delta sends only output_tokens',
+    'keeps the message_start counts when the %s message_delta sends only output_tokens',
     async (stopReason, terminalType) => {
       mocks.betaMessagesCreate.mockResolvedValueOnce(
         createMockStream([
@@ -456,6 +457,7 @@ describe('Anthropic usage extraction', () => {
                 output_tokens: 1,
                 cache_creation_input_tokens: 7,
                 cache_read_input_tokens: 40,
+                server_tool_use: { web_search_requests: 2 },
               },
             },
           },
@@ -483,6 +485,7 @@ describe('Anthropic usage extraction', () => {
         completionTokens: 10,
         totalTokens: 23,
         promptTokensDetails: { cacheWriteTokens: 7, cachedTokens: 40 },
+        providerUsageDetails: { serverToolUse: { webSearchRequests: 2 } },
       })
     },
   )
@@ -503,6 +506,7 @@ describe('Anthropic usage extraction', () => {
               output_tokens: 1,
               cache_creation_input_tokens: 7,
               cache_read_input_tokens: 40,
+              server_tool_use: { web_search_requests: 1 },
             },
           },
         },
@@ -516,6 +520,7 @@ describe('Anthropic usage extraction', () => {
             output_tokens: 10,
             cache_creation_input_tokens: 8,
             cache_read_input_tokens: 50,
+            server_tool_use: { web_search_requests: 3 },
           },
         },
         { type: 'message_stop' },
@@ -537,6 +542,7 @@ describe('Anthropic usage extraction', () => {
       completionTokens: 10,
       totalTokens: 30,
       promptTokensDetails: { cacheWriteTokens: 8, cachedTokens: 50 },
+      providerUsageDetails: { serverToolUse: { webSearchRequests: 3 } },
     })
   })
 

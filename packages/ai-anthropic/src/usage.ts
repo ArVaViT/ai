@@ -84,8 +84,9 @@ export function buildAnthropicUsage(
  * Merge the `message_start` usage of a stream into the usage of its closing
  * `message_delta`. The delta counts are cumulative, so they win. A count that
  * the delta leaves null or out keeps its `message_start` value, the same as
- * the SDK's MessageStream. Some Anthropic-compatible servers send only
- * `output_tokens` on the delta.
+ * the SDK's MessageStream does for every count that `buildAnthropicUsage`
+ * reads. Some Anthropic-compatible servers send only `output_tokens` on the
+ * delta.
  */
 export function mergeAnthropicStreamUsage(
   start: Anthropic_SDK.Beta.BetaUsage | undefined,
@@ -101,5 +102,6 @@ export function mergeAnthropicStreamUsage(
       null,
     cache_read_input_tokens:
       delta.cache_read_input_tokens ?? start?.cache_read_input_tokens ?? null,
+    server_tool_use: delta.server_tool_use ?? start?.server_tool_use ?? null,
   }
 }
