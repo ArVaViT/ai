@@ -2154,6 +2154,91 @@ describe('StreamProcessor', () => {
 
       expect(events.onToolCall).toHaveBeenCalledTimes(1)
     })
+
+    it('fires a call once when the same RUN_FINISHED comes twice', () => {
+      const { events, processor } = run(...toolCall('tc-1'), finished())
+      processor.processChunk(finished())
+
+      expect(events.onToolCall).toHaveBeenCalledTimes(1)
+    })
+
+    it('fires a call once when pendingToolCallIds names it twice', () => {
+      const { events } = run(
+        ...toolCall('tc-1'),
+        finished({ type: 'success', pendingToolCallIds: ['tc-1', 'tc-1'] }),
+      )
+
+      expect(events.onToolCall).toHaveBeenCalledTimes(1)
+    })
+
+    it('fires a call once when it starts again after a MESSAGES_SNAPSHOT', () => {
+      const { events } = run(
+        ...toolCall('tc-1'),
+        chunk(EventType.MESSAGES_SNAPSHOT, {
+          messages: [
+            {
+              id: 'a-1',
+              role: 'assistant',
+              toolCalls: [
+                {
+                  id: 'tc-1',
+                  type: 'function',
+                  function: { name: 'ping', arguments: '{}' },
+                },
+              ],
+            },
+          ],
+        }),
+        ...toolCall('tc-1'),
+        finished(),
+      )
+
+      expect(events.onToolCall).toHaveBeenCalledTimes(1)
+    })
+
+    // A tool-call part can keep a non-terminal state after its result. The
+    // result is then in `output` or in a tool-result part.
+    it.each([
+      ['an output', 'output'],
+      ['a tool-result part', 'tool-result'],
+    ])('skips a call that has %s', (_, answer) => {
+      const { events, processor } = run(...toolCall('tc-1'))
+      processor.addToolResult('tc-1', { pong: true })
+      processor.setMessages(
+        processor.getMessages().map((msg) => ({
+          ...msg,
+          parts: msg.parts
+            .filter((p) => answer === 'tool-result' || p.type !== 'tool-result')
+            .map((p) =>
+              p.type === 'tool-call'
+                ? {
+                    ...p,
+                    state: 'input-complete' as const,
+                    output: answer === 'output' ? p.output : undefined,
+                  }
+                : p,
+            ),
+        })),
+      )
+      processor.processChunk(finished())
+
+      expect(events.onToolCall).not.toHaveBeenCalled()
+    })
+
+    it('skips a call with cut-off arguments and warns', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const { events } = run(
+        ev.toolStart('tc-1', 'ping'),
+        ev.toolArgs('tc-1', '{"msg":"hel'),
+        ev.runFinished('length'),
+      )
+
+      expect(events.onToolCall).not.toHaveBeenCalled()
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining('Did not run tool call tc-1'),
+      )
+      warn.mockRestore()
+    })
   })
 
   // ==========================================================================
