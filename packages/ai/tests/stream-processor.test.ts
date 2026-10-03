@@ -2109,6 +2109,37 @@ describe('StreamProcessor', () => {
       })
     })
 
+    it('parses the arguments of a call a parts snapshot left without input', () => {
+      const { events } = run(
+        ev.toolStart('tc-1', 'ping'),
+        ev.toolArgs('tc-1', '{"n":1}'),
+        chunk(EventType.MESSAGES_SNAPSHOT, {
+          messages: [
+            {
+              id: 'a-1',
+              role: 'assistant',
+              parts: [
+                {
+                  type: 'tool-call',
+                  id: 'tc-1',
+                  name: 'ping',
+                  arguments: '{"n":1}',
+                  state: 'input-streaming',
+                },
+              ],
+            },
+          ],
+        }),
+        finished({ type: 'success' }),
+      )
+
+      expect(events.onToolCall).toHaveBeenCalledWith({
+        toolCallId: 'tc-1',
+        toolName: 'ping',
+        input: { n: 1 },
+      })
+    })
+
     it('keeps the calls of a run that another run overlaps', () => {
       const { events, processor } = run(
         ...toolCall('tc-1'),

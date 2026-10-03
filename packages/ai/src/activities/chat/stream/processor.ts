@@ -201,6 +201,21 @@ function serializeToolInput(input: unknown): string | undefined {
 }
 
 /**
+ * The input of a tool call from its raw arguments: `{}` for an empty string,
+ * `undefined` when the arguments are not complete JSON (for example cut off)
+ * or are `null`.
+ */
+function parseToolArguments(args: string): unknown {
+  if (args.trim() === '') return {}
+  try {
+    const parsed: unknown = JSON.parse(args)
+    return parsed ?? undefined
+  } catch {
+    return undefined
+  }
+}
+
+/**
  * StreamProcessor - State machine for processing AI response streams
  *
  * Manages the full UIMessage[] conversation and emits events on changes.
@@ -2206,9 +2221,10 @@ export class StreamProcessor {
       ) {
         continue
       }
-      // An empty argument string is a call with no arguments.
-      const input =
-        part.input ?? (part.arguments.trim() === '' ? {} : undefined)
+      // A snapshot can carry a part with arguments but no input. Parse them
+      // strictly, as completeToolCall() does. An empty argument string is a
+      // call with no arguments.
+      const input = part.input ?? parseToolArguments(part.arguments)
       if (input === undefined) {
         console.warn(
           `[StreamProcessor] Did not run tool call ${toolCallId}: the arguments of ${part.name} are not complete JSON`,
