@@ -237,5 +237,32 @@ describe('StreamProcessor subagent parts', () => {
       expect(warn).toHaveBeenCalledOnce()
       warn.mockRestore()
     })
+
+    it('closes a child chunk stream when the run finishes', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const processor = new StreamProcessor()
+      const text = (delta: string, messageId?: string) =>
+        ({
+          type: EventType.TEXT_MESSAGE_CHUNK,
+          timestamp: Date.now(),
+          ...(messageId !== undefined ? { messageId } : {}),
+          delta,
+        }) as StreamChunk
+      for (const event of [
+        ev.runStarted(),
+        started('sub-1'),
+        attributed(text('hi', 'c-1'), 'sub-1'),
+        ev.runFinished(),
+        text(' there'),
+      ]) {
+        processor.processChunk(event)
+      }
+      const contents = partsOf(processor.getMessages()).flatMap((part) =>
+        part.type === 'text' ? [part.content] : [],
+      )
+      expect(contents).toEqual(['hi'])
+      expect(warn).toHaveBeenCalledOnce()
+      warn.mockRestore()
+    })
   })
 })

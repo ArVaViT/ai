@@ -5275,6 +5275,38 @@ describe('StreamProcessor', () => {
       })
     })
 
+    it('keeps a sender name and metadata that arrives on a later chunk', () => {
+      const named = messagesOf(
+        ev.runStarted(),
+        textChunk({ messageId: 'msg-1', delta: 'hi', name: 'Ada' }),
+        ev.runFinished(),
+      )
+      expect(named[0]?.name).toBe('Ada')
+
+      const tools = messagesOf(
+        ev.runStarted(),
+        toolChunk({ toolCallId: 'tc-1', toolCallName: 'lookup', delta: '{' }),
+        toolChunk({ delta: '}', metadata: { thoughtSignature: 'sig-2' } }),
+        ev.runFinished(),
+      )
+      expect(
+        tools[0]?.parts.find((part) => part.type === 'tool-call'),
+      ).toMatchObject({
+        metadata: { thoughtSignature: 'sig-2' },
+      })
+
+      const reasoning = messagesOf(
+        ev.runStarted(),
+        reasoningChunk({
+          messageId: 'r-1',
+          delta: 'think',
+          metadata: { note: 'r' },
+        }),
+        ev.runFinished(),
+      )
+      expect(reasoning[0]?.metadata).toEqual({ note: 'r' })
+    })
+
     it.each([
       chunk(EventType.RAW, { event: {} }),
       chunk(EventType.ACTIVITY_SNAPSHOT, {

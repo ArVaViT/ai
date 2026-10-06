@@ -170,9 +170,10 @@ const STRUCTURED_OUTPUT_UPDATE_BATCH_SIZE = 12
 type ChunkFamily = 'TEXT_MESSAGE' | 'TOOL_CALL' | 'REASONING_MESSAGE'
 
 /**
- * Events that leave an open *_CHUNK stream open, as in the AG-UI client's
- * chunk transform. A subagent's own chunks go to its child processor, so its
- * lifecycle events do not end this processor's stream either.
+ * Events that leave this processor's open *_CHUNK stream open.
+ * RAW, activity events, and REASONING_ENCRYPTED_VALUE match the AG-UI client.
+ * Subagent lifecycle events stay here too: the child processor owns that
+ * lane, and SUBAGENT_FINISHED or SUBAGENT_ERROR finalizes the child.
  */
 const CHUNK_PASS_THROUGH: ReadonlySet<string> = new Set([
   'RAW',
@@ -182,6 +183,14 @@ const CHUNK_PASS_THROUGH: ReadonlySet<string> = new Set([
   'SUBAGENT_STARTED',
   'SUBAGENT_FINISHED',
   'SUBAGENT_ERROR',
+])
+
+/** A run-level event closes every open shorthand lane, including children. */
+const RUN_LEVEL_CLOSES_LANES: ReadonlySet<string> = new Set([
+  'RUN_STARTED',
+  'RUN_FINISHED',
+  'RUN_ERROR',
+  'MESSAGES_SNAPSHOT',
 ])
 
 function interruptBatchHasGeneric(interrupts: Array<Interrupt>): boolean {
@@ -817,6 +826,7 @@ export class StreamProcessor {
             type: EventType.TEXT_MESSAGE_START,
             messageId: id,
             role: chunk.role ?? 'assistant',
+            ...(chunk.name !== undefined ? { name: chunk.name } : {}),
             timestamp,
           })
           this.openChunk = { family: 'TEXT_MESSAGE', id }
@@ -855,11 +865,14 @@ export class StreamProcessor {
           })
           this.openChunk = { family: 'TOOL_CALL', id }
         }
-        if (chunk.delta !== undefined) {
+        if (chunk.delta !== undefined || chunk.metadata !== undefined) {
           events.push({
             type: EventType.TOOL_CALL_ARGS,
             toolCallId: id,
-            delta: chunk.delta,
+            delta: chunk.delta ?? '',
+            ...(chunk.metadata !== undefined
+              ? { metadata: chunk.metadata }
+              : {}),
             timestamp,
           })
         }
@@ -882,20 +895,35 @@ export class StreamProcessor {
           })
           this.openChunk = { family: 'REASONING_MESSAGE', id }
         }
-        if (chunk.delta !== undefined) {
+        if (chunk.delta !== undefined || chunk.metadata !== undefined) {
           events.push({
             type: EventType.REASONING_MESSAGE_CONTENT,
             messageId: id,
-            delta: chunk.delta,
+            delta: chunk.delta ?? '',
+            ...(chunk.metadata !== undefined
+              ? { metadata: chunk.metadata }
+              : {}),
             timestamp,
           })
         }
         return events
       }
-      default:
-        return open && !CHUNK_PASS_THROUGH.has(chunk.type)
-          ? [...this.closeChunk(), chunk]
-          : [chunk]
+      default: {
+        const events =
+          open && !CHUNK_PASS_THROUGH.has(chunk.type) ? this.closeChunk() : []
+        if (RUN_LEVEL_CLOSES_LANES.has(chunk.type)) {
+          this.closeChildChunkLanes()
+        }
+        return [...events, chunk]
+      }
+    }
+  }
+
+  /** Synthesize *_END on every nested shorthand lane and apply those events there. */
+  private closeChildChunkLanes(): void {
+    for (const child of this.childProcessors.values()) {
+      for (const event of child.closeChunk()) child.dispatchChunk(event)
+      child.closeChildChunkLanes()
     }
   }
 
@@ -1505,6 +1533,7 @@ export class StreamProcessor {
         pendingState.hasToolCallsSinceTextStart = false
       }
 
+      this.applySenderName(messageId, chunk.name)
       this.mergeMessageMetadata(messageId, chunk.metadata)
       this.emitMessagesChange()
       return
@@ -1531,6 +1560,7 @@ export class StreamProcessor {
           existingState.hasToolCallsSinceTextStart = false
         }
       }
+      this.applySenderName(messageId, chunk.name)
       this.mergeMessageMetadata(messageId, chunk.metadata)
       return
     }
@@ -1547,9 +1577,17 @@ export class StreamProcessor {
     this.createMessageState(messageId, uiRole)
     this.activeMessageIds.add(messageId)
 
+    this.applySenderName(messageId, chunk.name)
     this.mergeMessageMetadata(messageId, chunk.metadata)
     this.events.onStreamStart?.()
     this.emitMessagesChange()
+  }
+
+  private applySenderName(messageId: string, name: string | undefined): void {
+    if (name === undefined) return
+    this.messages = this.messages.map((msg) =>
+      msg.id === messageId ? { ...msg, name } : msg,
+    )
   }
 
   /**
@@ -2162,6 +2200,13 @@ export class StreamProcessor {
 
     const wasAwaitingInput = existingToolCall.state === 'awaiting-input'
 
+    if (chunk.metadata !== undefined) {
+      existingToolCall.metadata = mergeMetadata(
+        existingToolCall.metadata,
+        chunk.metadata,
+      )
+    }
+
     // Accumulate arguments from delta
     existingToolCall.arguments += chunk.delta || ''
 
@@ -2181,6 +2226,9 @@ export class StreamProcessor {
       name: existingToolCall.name,
       arguments: existingToolCall.arguments,
       state: existingToolCall.state,
+      ...(existingToolCall.metadata !== undefined && {
+        metadata: existingToolCall.metadata,
+      }),
     })
     this.emitMessagesChange()
 
@@ -2603,6 +2651,7 @@ export class StreamProcessor {
     const { messageId, state } = this.ensureAssistantMessage(
       this.getActiveAssistantMessageId() ?? undefined,
     )
+    this.mergeMessageMetadata(messageId, chunk.metadata)
 
     state.hasSeenReasoningEvents = true
     const delta = chunk.delta || ''
@@ -3099,7 +3148,8 @@ export class StreamProcessor {
    */
   finalizeStream(): void {
     this.isDone = true
-    this.openChunk = null
+    for (const event of this.closeChunk()) this.dispatchChunk(event)
+    this.closeChildChunkLanes()
     let lastAssistantMessage: UIMessage | undefined
 
     // Finalize ALL active messages
