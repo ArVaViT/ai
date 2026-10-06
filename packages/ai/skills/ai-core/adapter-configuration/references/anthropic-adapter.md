@@ -123,8 +123,9 @@ chat({
   messages,
   modelOptions: {
     // Adaptive thinking only — budget_tokens is rejected (400).
-    // On claude-fable-5 and claude-sonnet-5-5, { type: 'disabled' } is
-    // also rejected; elsewhere it opts out of thinking.
+    // On claude-fable-5, claude-fable-5-1, claude-opus-5-5, and
+    // claude-sonnet-5-5, { type: 'disabled' } is also rejected; elsewhere
+    // it opts out of thinking.
     thinking: { type: 'adaptive', display: 'summarized' },
     // Effort lives under output_config; 'xhigh' is available on
     // Opus 4.7+, Sonnet 5, Sonnet 5.5, and Fable 5.
@@ -140,8 +141,8 @@ chat({
 - `thinking.budget_tokens` must be >= 1024 AND less than `modelOptions.max_tokens`.
   Failing either check throws a validation error.
 - Cannot set both `top_p` and `temperature` at the same time (throws error).
-- `claude-sonnet-5`, `claude-sonnet-5-5`, `claude-fable-5`, `claude-opus-4-8`,
-  and `claude-opus-4-7` do NOT accept `temperature`, `top_p`, `top_k`, or
+- `claude-sonnet-5`, `claude-sonnet-5-5`, `claude-fable-5`, `claude-fable-5-1`,
+  `claude-opus-4-8`, and `claude-opus-4-7` do NOT accept `temperature`, `top_p`, `top_k`, or
   `thinking: { type: 'enabled', budget_tokens }` — adaptive thinking +
   `output_config.effort` replace them (typed per model).
 - System prompts support prompt caching via `cache_control` on `TextBlockParam[]`.
