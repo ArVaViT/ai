@@ -31,10 +31,11 @@ export function buildAnthropicUsage(
     | Anthropic_SDK.Beta.BetaMessageDeltaUsage
     | undefined
     | null,
+  start?: Anthropic_SDK.Beta.BetaUsage,
 ): TokenUsage<AnthropicProviderUsageDetails> | undefined {
   if (!usage) return undefined
 
-  const inputTokens = usage.input_tokens ?? 0
+  const inputTokens = usage.input_tokens ?? start?.input_tokens ?? 0
   // `|| 0` (rather than `?? 0`) matches the sibling builders and stays defensive
   // against a runtime-absent count without tripping no-unnecessary-condition
   // (the SDK types output_tokens as a required number).
@@ -49,8 +50,10 @@ export function buildAnthropicUsage(
   // Add prompt token details for cache tokens. Only attach the details object
   // when at least one field is present so we don't emit an empty `{}` (every
   // other adapter guards with the same Object.keys check).
-  const cacheCreation = usage.cache_creation_input_tokens
-  const cacheRead = usage.cache_read_input_tokens
+  const cacheCreation =
+    usage.cache_creation_input_tokens ?? start?.cache_creation_input_tokens
+  const cacheRead =
+    usage.cache_read_input_tokens ?? start?.cache_read_input_tokens
 
   const promptTokensDetails = {
     ...(cacheCreation ? { cacheWriteTokens: cacheCreation } : {}),
@@ -62,7 +65,7 @@ export function buildAnthropicUsage(
 
   // Add provider-specific usage details for server tool use, again only when
   // the provider actually reported any server tool requests.
-  const serverToolUse = usage.server_tool_use
+  const serverToolUse = usage.server_tool_use ?? start?.server_tool_use
   const serverToolUseDetails = {
     ...(serverToolUse?.web_search_requests
       ? { webSearchRequests: serverToolUse.web_search_requests }
@@ -78,30 +81,4 @@ export function buildAnthropicUsage(
   }
 
   return result
-}
-
-/**
- * Merge the `message_start` usage of a stream into the usage of its closing
- * `message_delta`. The delta counts are cumulative, so they win. A count that
- * the delta leaves null or out keeps its `message_start` value, the same as
- * the SDK's MessageStream does for every count that `buildAnthropicUsage`
- * reads. Some Anthropic-compatible servers send only `output_tokens` on the
- * delta.
- */
-export function mergeAnthropicStreamUsage(
-  start: Anthropic_SDK.Beta.BetaUsage | undefined,
-  delta: Anthropic_SDK.Beta.BetaMessageDeltaUsage | undefined,
-): Anthropic_SDK.Beta.BetaMessageDeltaUsage | undefined {
-  if (!delta) return undefined
-  return {
-    ...delta,
-    input_tokens: delta.input_tokens ?? start?.input_tokens ?? null,
-    cache_creation_input_tokens:
-      delta.cache_creation_input_tokens ??
-      start?.cache_creation_input_tokens ??
-      null,
-    cache_read_input_tokens:
-      delta.cache_read_input_tokens ?? start?.cache_read_input_tokens ?? null,
-    server_tool_use: delta.server_tool_use ?? start?.server_tool_use ?? null,
-  }
 }

@@ -16,7 +16,7 @@ import {
   readCodeExecutionSkills,
 } from '../tools/code-execution-tool'
 import { validateTextProviderOptions } from '../text/text-provider-options'
-import { buildAnthropicUsage, mergeAnthropicStreamUsage } from '../usage'
+import { buildAnthropicUsage } from '../usage'
 import {
   createAnthropicClient,
   generateId,
@@ -1536,9 +1536,7 @@ export class AnthropicTextAdapter<
         } else if (event.type === 'message_delta') {
           if (event.delta.stop_reason) {
             hasEmittedRunFinished = true
-            const usage = buildAnthropicUsage(
-              mergeAnthropicStreamUsage(messageStartUsage, event.usage),
-            )
+            const usage = buildAnthropicUsage(event.usage, messageStartUsage)
 
             // Close reasoning events if still open
             if (reasoningMessageId && !hasClosedReasoning) {
